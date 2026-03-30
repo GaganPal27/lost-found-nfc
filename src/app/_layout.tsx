@@ -4,11 +4,12 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { initRevenueCat } from '../lib/revenuecat';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
+import { startBLEScanning, stopBLEScanning } from '../lib/ble';
 import '../../global.css';
 
 export default function RootLayout() {
   const { session, initialized: authInitialized, setSession } = useAuthStore();
-  const { refreshTier, initialized: subInitialized } = useSubscriptionStore();
+  const { refreshTier, initialized: subInitialized, tier } = useSubscriptionStore();
   const segments = useSegments();
   const router = useRouter();
 
@@ -26,6 +27,16 @@ export default function RootLayout() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (subInitialized) {
+      if (tier === 'pro' || tier === 'max') {
+        startBLEScanning();
+      } else {
+        stopBLEScanning();
+      }
+    }
+  }, [tier, subInitialized]);
 
   useEffect(() => {
     if (!authInitialized || !subInitialized) return;
