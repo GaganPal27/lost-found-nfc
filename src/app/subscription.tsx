@@ -107,7 +107,7 @@ export default function SubscriptionScreen() {
         >
           {loading && <ActivityIndicator color="#fff" className="mr-3" />}
           <Text className="text-white text-xl font-bold">
-            Get started with {PLAN_LIMITS[selectedTier].name || selectedTier.toUpperCase()}
+            Get started with {selectedTier.toUpperCase()}
           </Text>
         </TouchableOpacity>
 

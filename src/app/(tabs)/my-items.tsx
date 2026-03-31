@@ -22,7 +22,7 @@ export default function MyItemsScreen() {
     return () => unsubscribeFromItems();
   }, [user]);
 
-  const limit = PLAN_LIMITS[tier].maxItems;
+  const limit = PLAN_LIMITS[tier as keyof typeof PLAN_LIMITS].maxItems;
   const isAtLimit = itemsCount >= limit;
 
   const handleRefresh = async () => {

@@ -30,7 +30,7 @@ export const readNDEFUrl = async (): Promise<string | null> => {
     const tag = await NfcManager.getTag();
     if (tag?.ndefMessage && tag.ndefMessage.length > 0) {
       const record = tag.ndefMessage[0];
-      return Ndef.uri.decodePayload(record.payload as number[]);
+      return Ndef.uri.decodePayload(new Uint8Array(record.payload as number[]));
     }
     return null;
   } catch (ex) {

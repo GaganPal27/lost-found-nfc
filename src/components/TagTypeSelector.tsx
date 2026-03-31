@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity } from 'react-native';
-import { useSubscriptionStore } from '../../stores/subscriptionStore';
-import { PLAN_LIMITS } from '../../lib/constants';
+import { useSubscriptionStore } from '../stores/subscriptionStore';
+import { PLAN_LIMITS } from '../lib/constants';
 
 type TagType = 'nfc_only' | 'nfc_ble' | 'ble_only';
 
@@ -12,8 +12,7 @@ interface TagTypeSelectorProps {
 
 export default function TagTypeSelector({ selectedType, onSelect, onLockedSelect }: TagTypeSelectorProps) {
   const { tier } = useSubscriptionStore();
-  const allowedTypes = PLAN_LIMITS[tier]?.tagTypes || ['nfc_only'];
-
+  const allowedTypes = (PLAN_LIMITS[tier as keyof typeof PLAN_LIMITS]?.tagTypes || ['nfc_only']) as readonly string[];
   const options: Array<{ id: TagType, label: string, requiredTier: string }> = [
     { id: 'nfc_only', label: 'NFC Sticker', requiredTier: 'basic' },
     { id: 'nfc_ble', label: 'NFC + BLE Combo', requiredTier: 'pro' },
