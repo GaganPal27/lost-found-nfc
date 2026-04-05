@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
@@ -19,12 +19,14 @@ function generateUUID() {
   });
 }
 
+const CATEGORIES = ['Personal', 'Electronics', 'Bag', 'Keys', 'Wallet', 'Travel', 'Other'];
+
 export default function RegisterItemScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { itemsCount, fetchCount } = useItemStore();
   const { tier } = useSubscriptionStore();
-  
+
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Personal');
   const [color, setColor] = useState('');
@@ -42,19 +44,17 @@ export default function RegisterItemScreen() {
   const limitReached = itemsCount >= PLAN_LIMITS[tier].maxItems;
 
   const pickImage = async () => {
-    // Simulated image picker due to peer dependency issues
-    setImageUri("https://via.placeholder.com/300");
+    setImageUri('https://via.placeholder.com/300');
   };
 
   const handleRegister = async () => {
-    if (!name.trim()) return Alert.alert('Error', 'Item name is required');
+    if (!name.trim()) return Alert.alert('Required', 'Item name is required');
     if (limitReached) return setShowUpgrade(true);
 
     try {
       setLoading(true);
-
       const nfc_uid = tagType !== 'ble_only' ? generateUUID() : null;
-      const ble_beacon_id = tagType !== 'nfc_only' ? `LF-BLE-${generateUUID().slice(0,6)}` : null;
+      const ble_beacon_id = tagType !== 'nfc_only' ? `LF-BLE-${generateUUID().slice(0, 6).toUpperCase()}` : null;
 
       const { data, error } = await supabase.from('items').insert({
         user_id: user?.id,
@@ -66,30 +66,28 @@ export default function RegisterItemScreen() {
         nfc_uid,
         ble_beacon_id,
         tag_type: tagType,
-        status: 'active'
+        status: 'active',
       }).select().single();
 
       if (error) throw error;
 
-      router.push({
-        pathname: '/register-item/write-tag',
-        params: { 
-          id: data.id,
-          nfc_uid: nfc_uid || '',
-          ble_beacon_id: ble_beacon_id || '',
-          tag_type: tagType
-        }
-      });
-      
+      if (tagType === 'nfc_ble') {
+        router.push({ pathname: '/nfc-ble-setup', params: { id: data.id, nfc_uid: nfc_uid || '', ble_beacon_id: ble_beacon_id || '' } });
+      } else {
+        router.push({
+          pathname: '/register-item/write-tag',
+          params: { id: data.id, nfc_uid: nfc_uid || '', ble_beacon_id: ble_beacon_id || '', tag_type: tagType },
+        });
+      }
     } catch (e: any) {
-      Alert.alert('Error saving item', e.message);
+      Alert.alert('Error', e.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleLockedSelect = (requiredTier: string) => {
-    setUpgradeReason({ tier: requiredTier as 'pro'|'max', feature: 'Premium Tag Types' });
+    setUpgradeReason({ tier: requiredTier as 'pro' | 'max', feature: 'Premium Tag Types' });
     setShowUpgrade(true);
   };
 
@@ -97,57 +95,139 @@ export default function RegisterItemScreen() {
     const rTier = showUpgrade ? upgradeReason.tier : 'pro';
     const rFeat = showUpgrade ? upgradeReason.feature : 'Add more items';
     return (
-      <View className="flex-1 justify-center p-6 bg-white">
+      <View className="flex-1 justify-center p-6 bg-darkBg">
         <EntitlementGate requiredTier={rTier as any} featureName={rFeat}>
-           <Text>Hidden Content</Text>
+          <Text className="text-white">Hidden</Text>
         </EntitlementGate>
         <TouchableOpacity className="mt-4" onPress={() => showUpgrade ? setShowUpgrade(false) : router.back()}>
-          <Text className="text-center text-gray-500 font-bold p-4 text-lg">Go back</Text>
+          <Text className="text-center text-slate-400 font-bold p-4 text-lg">← Go back</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerStyle={{ padding: 24, paddingBottom: 60 }}>
-      <Text className="text-3xl font-bold mb-6 text-gray-900 mt-8">Register Item</Text>
+    <View className="flex-1 bg-darkBg">
+      <StatusBar barStyle="light-content" />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 80, paddingTop: 60 }}>
+        {/* Back */}
+        <TouchableOpacity onPress={() => router.back()} className="mb-6 flex-row items-center" activeOpacity={0.7}>
+          <Text className="text-primary text-lg mr-1">←</Text>
+          <Text className="text-primary font-semibold">My Items</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity onPress={pickImage} className="w-full h-40 bg-gray-100 rounded-xl mb-6 items-center justify-center border-2 border-dashed border-gray-300 overflow-hidden">
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} className="w-full h-full" />
-        ) : (
-          <Text className="text-gray-500 font-medium">Tap to add photo</Text>
-        )}
-      </TouchableOpacity>
+        <Text className="text-slate-400 text-xs uppercase tracking-widest mb-2">New Item</Text>
+        <Text className="text-white text-3xl font-bold mb-8">Register Item</Text>
 
-      <View className="mb-4">
-        <Text className="text-gray-700 font-semibold mb-2">Item Name *</Text>
-        <TextInput
-          className="bg-gray-50 p-4 rounded-xl border border-gray-200"
-          value={name} onChangeText={setName} placeholder="e.g. My Black Backpack"
+        {/* Image Picker */}
+        <TouchableOpacity
+          onPress={pickImage}
+          className="w-full h-44 bg-darkCard border-2 border-dashed border-darkBorder rounded-3xl mb-6 items-center justify-center overflow-hidden"
+          activeOpacity={0.8}
+        >
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} className="w-full h-full" />
+          ) : (
+            <View className="items-center">
+              <Text className="text-4xl mb-2">📷</Text>
+              <Text className="text-slate-400 font-medium">Tap to add photo</Text>
+              <Text className="text-slate-600 text-xs mt-1">Optional but recommended</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Item Name */}
+        <View className="mb-5">
+          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Item Name *</Text>
+          <View className="bg-darkCard border border-darkBorder rounded-2xl px-4 flex-row items-center">
+            <TextInput
+              className="flex-1 text-white py-4 text-base"
+              placeholder="e.g. Black Leather Wallet"
+              placeholderTextColor="#475569"
+              value={name}
+              onChangeText={setName}
+            />
+          </View>
+        </View>
+
+        {/* Category */}
+        <View className="mb-5">
+          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-3 font-semibold">Category</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View className="flex-row gap-2">
+              {CATEGORIES.map(cat => (
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => setCategory(cat)}
+                  className={`px-4 py-2 rounded-full border ${
+                    category === cat
+                      ? 'bg-primary/20 border-primary/50'
+                      : 'bg-darkCard border-darkBorder'
+                  }`}
+                  activeOpacity={0.7}
+                >
+                  <Text className={`font-semibold text-sm ${category === cat ? 'text-primary' : 'text-slate-400'}`}>
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+
+        {/* Color */}
+        <View className="mb-5">
+          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Color</Text>
+          <View className="bg-darkCard border border-darkBorder rounded-2xl px-4">
+            <TextInput
+              className="text-white py-4 text-base"
+              placeholder="e.g. Black, Blue, Silver..."
+              placeholderTextColor="#475569"
+              value={color}
+              onChangeText={setColor}
+            />
+          </View>
+        </View>
+
+        {/* Description */}
+        <View className="mb-6">
+          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Description</Text>
+          <View className="bg-darkCard border border-darkBorder rounded-2xl px-4">
+            <TextInput
+              className="text-white py-4 text-base"
+              placeholder="Distinguishing features, damage, marks..."
+              placeholderTextColor="#475569"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              style={{ minHeight: 80 }}
+            />
+          </View>
+        </View>
+
+        {/* Tag Type */}
+        <TagTypeSelector
+          selectedType={tagType}
+          onSelect={setTagType}
+          onLockedSelect={handleLockedSelect}
         />
-      </View>
 
-      <View className="mb-6">
-        <Text className="text-gray-700 font-semibold mb-2">Description</Text>
-        <TextInput
-          className="bg-gray-50 p-4 rounded-xl border border-gray-200"
-          value={description} onChangeText={setDescription} placeholder="Small zipper is broken..."
-        />
-      </View>
-
-      <TagTypeSelector 
-        selectedType={tagType} 
-        onSelect={setTagType} 
-        onLockedSelect={handleLockedSelect} 
-      />
-
-      <TouchableOpacity
-        className={`w-full bg-primary p-4 rounded-xl items-center mt-4 ${loading ? 'opacity-70' : ''}`}
-        onPress={handleRegister} disabled={loading}
-      >
-        {loading ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold tracking-wide text-lg">Continue to Setup Tag</Text>}
-      </TouchableOpacity>
-    </ScrollView>
+        {/* Submit */}
+        <TouchableOpacity
+          className={`w-full bg-primary py-4 rounded-2xl items-center mt-6 ${loading ? 'opacity-60' : ''}`}
+          onPress={handleRegister}
+          disabled={loading}
+          activeOpacity={0.85}
+          style={{ shadowColor: '#06b6d4', shadowOpacity: 0.35, shadowRadius: 12, elevation: 5 }}
+        >
+          {loading
+            ? <ActivityIndicator color="#0f172a" />
+            : <Text className="text-slate-900 font-bold text-lg tracking-wide">Continue to Setup Tag →</Text>
+          }
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
   );
 }

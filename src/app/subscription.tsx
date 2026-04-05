@@ -1,19 +1,25 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import PlanSelector from '../components/subscription/PlanSelector';
 import TagBuyingGuide from '../components/subscription/TagBuyingGuide';
-import { SubscriptionTier } from '../lib/revenuecat';
+import { SubscriptionTier } from '../stores/subscriptionStore';
 import { PLAN_LIMITS } from '../lib/constants';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
 import Purchases from 'react-native-purchases';
 
+const PLAN_PERKS = {
+  basic:  { price: 'Free', color: 'text-slate-300', desc: 'Perfect for getting started' },
+  pro:    { price: '$4.99/mo', color: 'text-cyan-400', desc: 'For the frequent traveller' },
+  max:    { price: '$9.99/mo', color: 'text-purple-400', desc: 'Ultimate protection' },
+};
+
 export default function SubscriptionScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { setTier } = useSubscriptionStore();
+  const { tier: currentTier, setTier } = useSubscriptionStore();
   const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('pro');
   const [guideVisible, setGuideVisible] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -21,44 +27,21 @@ export default function SubscriptionScreen() {
   const finishSelection = async (finalTier: SubscriptionTier) => {
     setTier(finalTier);
     if (user?.id) {
-      // Update the user's tier in our database
-      await supabase
-        .from('users')
-        .update({ subscription_tier: finalTier })
-        .eq('auth_id', user.id);
+      await supabase.from('users').update({ subscription_tier: finalTier }).eq('auth_id', user.id);
     }
-    // Show the required hardware guide
     setGuideVisible(true);
   };
 
   const handlePurchase = async () => {
-    if (selectedTier === 'basic') {
-      await finishSelection('basic');
-      return;
-    }
-
+    if (selectedTier === 'basic') { await finishSelection('basic'); return; }
     try {
       setLoading(true);
-      // In a real app we fetch packages using Purchases.getOfferings()
-      // Here we assume standard RevenueCat product IDs mapping to tiers.
-      // E.g. com.lostandfound.pro_monthly or max_monthly.
-      // As specified in docs: pro_monthly, max_monthly.
       const offerings = await Purchases.getOfferings();
       const currentOffering = offerings.current;
-
-      if (!currentOffering) {
-        throw new Error('No subscription offerings available right now.');
-      }
-
-      // We expect packages with identifier matching the tier ('pro' | 'max')
-      // but in RevenueCat we have to map the package. Let's just mock purchase
-      // for the time being or attempt to use the identifier.
-      // RevenueCat standard integration requires correct package identifier in RC Dashboard.
+      if (!currentOffering) throw new Error('No subscription offerings available right now.');
       const packageToBuy = currentOffering.availablePackages.find(
-        (p) => p.identifier.toLowerCase().includes(selectedTier) || 
-               p.product.identifier.toLowerCase().includes(selectedTier)
+        p => p.identifier.toLowerCase().includes(selectedTier) || p.product.identifier.toLowerCase().includes(selectedTier)
       );
-
       if (packageToBuy) {
         const { customerInfo } = await Purchases.purchasePackage(packageToBuy);
         if (typeof customerInfo.entitlements.active[selectedTier] !== 'undefined') {
@@ -67,62 +50,99 @@ export default function SubscriptionScreen() {
           Alert.alert('Purchase error', 'Entitlement not granted.');
         }
       } else {
-        // Fallback for development if real products are not fully matched yet
-        Alert.alert(
-          'Dev Mode Notice', 
-          `Simulated purchase for ${selectedTier.toUpperCase()} plan. Real purchase requires exact RC package setup.`
-        );
+        Alert.alert('Dev Mode', `Simulated purchase for ${selectedTier.toUpperCase()} plan.`);
         await finishSelection(selectedTier);
       }
     } catch (e: any) {
-      if (!e.userCancelled) {
-        Alert.alert('Error purchasing', e.message);
-      }
+      if (!e.userCancelled) Alert.alert('Error', e.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGuideDismiss = () => {
-    setGuideVisible(false);
-    router.replace('/(tabs)/my-items');
-  };
+  const handleGuideDismiss = () => { setGuideVisible(false); router.replace('/(tabs)/my-items'); };
+
+  const selectedPerk = PLAN_PERKS[selectedTier as keyof typeof PLAN_PERKS];
 
   return (
-    <View className="flex-1 bg-white">
-      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 120 }}>
-        <Text className="text-3xl font-bold text-gray-900 mb-2 mt-8">Choose your plan</Text>
-        <Text className="text-xl text-gray-500 mb-8">
-          Protect your most valuable items with our global network.
+    <View className="flex-1 bg-darkBg">
+      <StatusBar barStyle="light-content" />
+
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 180, paddingTop: 60 }}>
+        {/* Back */}
+        <TouchableOpacity onPress={() => router.back()} className="mb-6 flex-row items-center" activeOpacity={0.7}>
+          <Text className="text-primary text-lg mr-1">←</Text>
+          <Text className="text-primary font-semibold">Back</Text>
+        </TouchableOpacity>
+
+        {/* Header */}
+        <Text className="text-slate-400 text-xs uppercase tracking-widest mb-2">Plans</Text>
+        <Text className="text-white text-4xl font-bold mb-2">Choose your{'\n'}protection level</Text>
+        <Text className="text-slate-400 text-base mb-8 leading-6">
+          Protect your most valuable items with{'\n'}the Lost & Found global network.
         </Text>
 
+        {/* Current plan badge */}
+        {currentTier !== 'basic' && (
+          <View className="bg-primary/15 border border-primary/30 rounded-2xl px-4 py-3 mb-6 flex-row items-center">
+            <View className="w-2 h-2 rounded-full bg-primary mr-3" />
+            <Text className="text-primary font-semibold text-sm">
+              Currently on <Text className="font-bold uppercase">{currentTier}</Text> plan
+            </Text>
+          </View>
+        )}
+
+        {/* Plan Cards */}
         <PlanSelector selectedTier={selectedTier} onSelectTier={setSelectedTier} />
+
+        {/* Feature Comparison */}
+        <View className="bg-darkCard border border-darkBorder rounded-3xl p-5 mt-6">
+          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-4 font-semibold">What's included</Text>
+          {[
+            { feature: 'Items protected', basic: '2', pro: '10', max: '∞' },
+            { feature: 'Tag types', basic: 'NFC only', pro: 'NFC + BLE', max: 'All types' },
+            { feature: 'Scan history', basic: '7 days', pro: '30 days', max: '90 days' },
+            { feature: 'Passive BLE tracking', basic: '✕', pro: '✓', max: '✓' },
+            { feature: 'Live location share', basic: '✕', pro: '✕', max: '✓' },
+          ].map((row, i) => (
+            <View key={i} className={`flex-row items-center py-3 ${i !== 4 ? 'border-b border-slate-700' : ''}`}>
+              <Text className="text-slate-400 text-sm flex-1">{row.feature}</Text>
+              <Text className={`text-xs font-bold w-16 text-center ${selectedTier === 'basic' ? 'text-white' : 'text-slate-500'}`}>{row.basic}</Text>
+              <Text className={`text-xs font-bold w-16 text-center ${selectedTier === 'pro' ? 'text-cyan-400' : 'text-slate-500'}`}>{row.pro}</Text>
+              <Text className={`text-xs font-bold w-16 text-center ${selectedTier === 'max' ? 'text-purple-400' : 'text-slate-500'}`}>{row.max}</Text>
+            </View>
+          ))}
+        </View>
       </ScrollView>
 
-      <View className="absolute bottom-0 w-full p-6 bg-white border-t border-gray-100 shadow-[0_-4px_6px_rgba(0,0,0,0.05)]">
+      {/* Bottom CTA */}
+      <View className="absolute bottom-0 w-full bg-darkBg border-t border-darkBorder px-6 pt-4 pb-8">
+        <View className="flex-row justify-between items-center mb-4">
+          <Text className="text-white font-bold text-base capitalize">{selectedTier} Plan</Text>
+          <Text className={`font-bold text-lg ${selectedPerk?.color}`}>{selectedPerk?.price}</Text>
+        </View>
+
         <TouchableOpacity
-          className="w-full bg-primary p-4 rounded-xl items-center mb-4 flex-row justify-center"
+          className={`w-full bg-primary py-4 rounded-2xl items-center flex-row justify-center mb-3 ${loading ? 'opacity-60' : ''}`}
           onPress={handlePurchase}
           disabled={loading}
+          activeOpacity={0.85}
+          style={{ shadowColor: '#06b6d4', shadowOpacity: 0.35, shadowRadius: 12, elevation: 5 }}
         >
-          {loading && <ActivityIndicator color="#fff" className="mr-3" />}
-          <Text className="text-white text-xl font-bold">
-            Get started with {selectedTier.toUpperCase()}
+          {loading && <ActivityIndicator color="#0f172a" className="mr-3" />}
+          <Text className="text-slate-900 font-bold text-lg">
+            {selectedTier === 'basic' ? 'Continue with Basic — Free' : `Get ${selectedTier.toUpperCase()}`}
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => finishSelection('basic')}>
-          <Text className="text-center text-gray-500 font-medium">
-            Continue with Basic — it's free
-          </Text>
-        </TouchableOpacity>
+        {selectedTier !== 'basic' && (
+          <TouchableOpacity onPress={() => finishSelection('basic')} activeOpacity={0.7}>
+            <Text className="text-slate-500 text-center text-sm">Continue with Basic — it's free</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      <TagBuyingGuide 
-        visible={guideVisible} 
-        tier={selectedTier} 
-        onDismiss={handleGuideDismiss} 
-      />
+      <TagBuyingGuide visible={guideVisible} tier={selectedTier} onDismiss={handleGuideDismiss} />
     </View>
   );
 }

@@ -5,7 +5,10 @@ export type SubscriptionTier = 'basic' | 'pro' | 'max';
 
 export const initRevenueCat = async () => {
   if (Platform.OS === 'android') {
-    Purchases.configure({ apiKey: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY || '' });
+    const apiKey = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY || '';
+    if (apiKey && apiKey.length > 5 && !apiKey.startsWith('YOUR_')) {
+      Purchases.configure({ apiKey });
+    }
   }
 };
 

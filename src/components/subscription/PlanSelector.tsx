@@ -1,44 +1,50 @@
 import { View } from 'react-native';
 import PlanCard from './PlanCard';
-import { PLAN_LIMITS } from '../../lib/constants';
-import type { SubscriptionTier } from '../../lib/revenuecat';
+import { SubscriptionTier } from '../../stores/subscriptionStore';
 
-interface PlanSelectorProps {
+const PLANS = [
+  {
+    id: 'basic' as SubscriptionTier,
+    name: 'Basic',
+    price: 'Free',
+    oneLiner: 'Get started with essentials',
+    badges: ['2 items', 'NFC only', '7-day history'],
+    isPopular: false,
+  },
+  {
+    id: 'pro' as SubscriptionTier,
+    name: 'Pro',
+    price: '$4.99',
+    oneLiner: 'For the frequent traveller',
+    badges: ['10 items', 'NFC + BLE', '30-day history', 'Passive tracking'],
+    isPopular: true,
+  },
+  {
+    id: 'max' as SubscriptionTier,
+    name: 'Max',
+    price: '$9.99',
+    oneLiner: 'Ultimate protection',
+    badges: ['Unlimited items', 'All tag types', '90-day history', 'Live location'],
+    isPopular: false,
+  },
+];
+
+interface Props {
   selectedTier: SubscriptionTier;
-  onSelectTier: (tier: SubscriptionTier) => void;
+  onSelectTier: (t: SubscriptionTier) => void;
 }
 
-export default function PlanSelector({ selectedTier, onSelectTier }: PlanSelectorProps) {
+export default function PlanSelector({ selectedTier, onSelectTier }: Props) {
   return (
-    <View className="w-full">
-      <PlanCard
-        id="basic"
-        name="Basic"
-        price={PLAN_LIMITS.basic.price}
-        oneLiner={PLAN_LIMITS.basic.oneLiner}
-        badges={[...PLAN_LIMITS.basic.badges]}
-        selected={selectedTier === 'basic'}
-        onSelect={() => onSelectTier('basic')}
-      />
-      <PlanCard
-        id="pro"
-        name="Pro"
-        price={PLAN_LIMITS.pro.price}
-        oneLiner={PLAN_LIMITS.pro.oneLiner}
-        badges={[...PLAN_LIMITS.pro.badges]}
-        isPopular={PLAN_LIMITS.pro.mostPopular}
-        selected={selectedTier === 'pro'}
-        onSelect={() => onSelectTier('pro')}
-      />
-      <PlanCard
-        id="max"
-        name="Max"
-        price={PLAN_LIMITS.max.price}
-        oneLiner={PLAN_LIMITS.max.oneLiner}
-        badges={[...PLAN_LIMITS.max.badges]}
-        selected={selectedTier === 'max'}
-        onSelect={() => onSelectTier('max')}
-      />
+    <View>
+      {PLANS.map(plan => (
+        <PlanCard
+          key={plan.id}
+          {...plan}
+          selected={selectedTier === plan.id}
+          onSelect={() => onSelectTier(plan.id)}
+        />
+      ))}
     </View>
   );
 }
