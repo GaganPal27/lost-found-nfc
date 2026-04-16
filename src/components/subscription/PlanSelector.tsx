@@ -8,7 +8,7 @@ const PLANS = [
     name: 'Basic',
     price: 'Free',
     oneLiner: 'Get started with essentials',
-    badges: ['2 items', 'NFC only', '7-day history'],
+    badges: ['5 items', 'NFC only', '7-day history'],
     isPopular: false,
   },
   {
@@ -16,7 +16,7 @@ const PLANS = [
     name: 'Pro',
     price: '$4.99',
     oneLiner: 'For the frequent traveller',
-    badges: ['10 items', 'NFC + BLE', '30-day history', 'Passive tracking'],
+    badges: ['15 items', 'BLE only', '30-day history', 'Passive tracking'],
     isPopular: true,
   },
   {
@@ -24,7 +24,7 @@ const PLANS = [
     name: 'Max',
     price: '$9.99',
     oneLiner: 'Ultimate protection',
-    badges: ['Unlimited items', 'All tag types', '90-day history', 'Live location'],
+    badges: ['Unlimited items', 'NFC + BLE', '90-day history', 'Live location'],
     isPopular: false,
   },
 ];

@@ -11,6 +11,9 @@ export default function RegistrationScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
   const router = useRouter();
 
   const fadeIn = useRef(new Animated.Value(0)).current;
@@ -93,8 +96,8 @@ export default function RegistrationScreen() {
             <View className="w-16 h-16 bg-darkCard border border-darkBorder rounded-2xl items-center justify-center mb-6">
               <Text className="text-3xl">🛡️</Text>
             </View>
-            <Text className="text-white text-4xl font-bold mb-2">Create Account</Text>
-            <Text className="text-darkMuted text-base leading-6">
+            <Text className="text-white text-4xl font-bold mb-2 select-none">Create Account</Text>
+            <Text className="text-darkMuted text-base leading-6 select-none">
               Join the Lost & Found Network.{'\n'}Protect your valuables — for free.
             </Text>
           </View>
@@ -102,7 +105,7 @@ export default function RegistrationScreen() {
           {/* Form Card */}
           <View className="bg-darkCard border border-darkBorder rounded-3xl p-6 mb-5">
             {/* Name */}
-            <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Full Name</Text>
+            <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold select-none">Full Name</Text>
             <View className="flex-row items-center bg-slate-800 border border-slate-700 rounded-2xl px-4 mb-4">
               <Text className="text-darkMuted text-lg mr-3">👤</Text>
               <TextInput
@@ -113,11 +116,14 @@ export default function RegistrationScreen() {
                 onChangeText={setName}
                 autoCapitalize="words"
                 autoCorrect={false}
+                returnKeyType="next"
+                onSubmitEditing={() => emailRef.current?.focus()}
+                blurOnSubmit={false}
               />
             </View>
 
             {/* Email */}
-            <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Email Address</Text>
+            <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold select-none">Email Address</Text>
             <View className="flex-row items-center bg-slate-800 border border-slate-700 rounded-2xl px-4 mb-4">
               <Text className="text-darkMuted text-lg mr-3">✉️</Text>
               <TextInput
@@ -129,11 +135,15 @@ export default function RegistrationScreen() {
                 autoCapitalize="none"
                 keyboardType="email-address"
                 autoCorrect={false}
+                ref={emailRef}
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+                blurOnSubmit={false}
               />
             </View>
 
             {/* Password */}
-            <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Password</Text>
+            <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold select-none">Password</Text>
             <View className="flex-row items-center bg-slate-800 border border-slate-700 rounded-2xl px-4 mb-2">
               <Text className="text-darkMuted text-lg mr-3">🔒</Text>
               <TextInput
@@ -145,6 +155,10 @@ export default function RegistrationScreen() {
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
+                ref={passwordRef}
+                returnKeyType="next"
+                onSubmitEditing={() => confirmRef.current?.focus()}
+                blurOnSubmit={false}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
                 <Text className="text-slate-500 text-sm font-semibold">{showPassword ? 'Hide' : 'Show'}</Text>
@@ -166,7 +180,7 @@ export default function RegistrationScreen() {
             )}
 
             {/* Confirm Password */}
-            <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Confirm Password</Text>
+            <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold select-none">Confirm Password</Text>
             <View className={`flex-row items-center bg-slate-800 rounded-2xl px-4 mb-6 border ${
               confirmPassword && confirmPassword !== password ? 'border-red-500/50' : 'border-slate-700'
             }`}>
@@ -180,6 +194,9 @@ export default function RegistrationScreen() {
                 secureTextEntry={!showConfirm}
                 autoCapitalize="none"
                 autoCorrect={false}
+                ref={confirmRef}
+                returnKeyType="done"
+                onSubmitEditing={handleRegister}
               />
               <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)} activeOpacity={0.7}>
                 <Text className="text-slate-500 text-sm font-semibold">{showConfirm ? 'Hide' : 'Show'}</Text>

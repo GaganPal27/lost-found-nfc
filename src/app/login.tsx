@@ -8,6 +8,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const passwordRef = useRef<TextInput>(null);
   const router = useRouter();
 
   // Pulse animation for decorative rings
@@ -69,20 +70,20 @@ export default function LoginScreen() {
           <View className="w-16 h-16 bg-darkCard border border-darkBorder rounded-2xl items-center justify-center mb-4">
             <Text className="text-3xl">📡</Text>
           </View>
-          <Text className="text-white text-3xl font-bold tracking-tight">Lost & Found</Text>
-          <Text className="text-darkMuted text-sm mt-1 tracking-widest uppercase">NFC Network</Text>
+          <Text className="text-white text-3xl font-bold tracking-tight select-none">Lost & Found</Text>
+          <Text className="text-darkMuted text-sm mt-1 tracking-widest uppercase select-none">NFC Network</Text>
         </View>
 
         {/* Heading */}
-        <Text className="text-white text-4xl font-bold text-center mb-2">Welcome Back</Text>
-        <Text className="text-darkMuted text-base text-center mb-10 px-4">
+        <Text className="text-white text-4xl font-bold text-center mb-2 select-none">Welcome Back</Text>
+        <Text className="text-darkMuted text-base text-center mb-10 px-4 select-none">
           Sign in to protect your items{'\n'}and manage your network.
         </Text>
 
         {/* Form Card */}
         <View className="w-full bg-darkCard border border-darkBorder rounded-3xl p-6 mb-4">
           {/* Email */}
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Email</Text>
+          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold select-none">Email</Text>
           <View className="flex-row items-center bg-slate-800 border border-slate-700 rounded-2xl px-4 mb-4">
             <Text className="text-darkMuted text-lg mr-3">✉️</Text>
             <TextInput
@@ -94,11 +95,14 @@ export default function LoginScreen() {
               autoCapitalize="none"
               keyboardType="email-address"
               autoCorrect={false}
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              blurOnSubmit={false}
             />
           </View>
 
           {/* Password */}
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Password</Text>
+          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold select-none">Password</Text>
           <View className="flex-row items-center bg-slate-800 border border-slate-700 rounded-2xl px-4 mb-2">
             <Text className="text-darkMuted text-lg mr-3">🔒</Text>
             <TextInput
@@ -110,6 +114,9 @@ export default function LoginScreen() {
               secureTextEntry={!showPassword}
               autoCapitalize="none"
               autoCorrect={false}
+              ref={passwordRef}
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
               <Text className="text-slate-500 text-sm font-semibold">{showPassword ? 'Hide' : 'Show'}</Text>

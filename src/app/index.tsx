@@ -1,13 +1,8 @@
-import { useEffect } from 'react';
-import { useRouter } from 'expo-router';
+import { Redirect } from 'expo-router';
 
-// This is just a redirect shim — the real navigation
-// is handled by the auth guard in _layout.tsx.
-// Authenticated users go to /(tabs)/my-items automatically.
+// This is a redirect shim.
+// Unauthenticated users will be caught by the auth guard in _layout.tsx 
+// and sent to /login. Authenticated users will land on my-items.
 export default function IndexScreen() {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace('/(tabs)/my-items');
-  }, []);
-  return null;
+  return <Redirect href="/(tabs)/my-items" />;
 }

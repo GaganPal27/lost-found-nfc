@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Alert, ActivityIndicator, Animated, Easin
 import { useRouter } from 'expo-router';
 import { readNDEFUrl } from '../../lib/nfc';
 import { supabase } from '../../lib/supabase';
+import * as Haptics from 'expo-haptics';
 
 export default function ScanScreen() {
   const [scanning, setScanning] = useState(false);
@@ -18,8 +19,8 @@ export default function ScanScreen() {
       Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
-          Animated.timing(anim, { toValue: 1, duration: 1600, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-          Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
         ])
       );
     Animated.parallel([
@@ -67,6 +68,7 @@ export default function ScanScreen() {
         return;
       }
 
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.push(`/item/${nfcUid}`);
     } catch (err) {
       Alert.alert('Error', 'An error occurred during scanning.');
@@ -76,11 +78,10 @@ export default function ScanScreen() {
     }
   };
 
-  const ringScale = (anim: Animated.Value, max: number) =>
-    anim.interpolate({ inputRange: [0, 1], outputRange: [1, max] });
+  const ringScale = (anim: Animated.Value, max: number) => max; // Fixed size
 
   const ringOpacity = (anim: Animated.Value) =>
-    anim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.6, 0.2, 0] });
+    anim.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.7] });
 
   return (
     <View className="flex-1 bg-darkBg items-center justify-center px-6">

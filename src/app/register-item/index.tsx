@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { decode } from 'base64-arraybuffer';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { useItemStore } from '../../stores/itemStore';
@@ -44,7 +46,37 @@ export default function RegisterItemScreen() {
   const limitReached = itemsCount >= PLAN_LIMITS[tier].maxItems;
 
   const pickImage = async () => {
-    setImageUri('https://via.placeholder.com/300');
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please allow access to your photo library to add an item photo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+      // Upload to Supabase storage in background
+      if (asset.base64 && user?.id) {
+        const ext = asset.uri.split('.').pop() || 'jpg';
+        const path = `items/${user.id}/${Date.now()}.${ext}`;
+        const { data, error } = await supabase.storage
+          .from('item-images')
+          .upload(path, decode(asset.base64), {
+            contentType: `image/${ext}`,
+            upsert: true,
+          });
+        if (!error && data) {
+          const { data: urlData } = supabase.storage.from('item-images').getPublicUrl(data.path);
+          if (urlData?.publicUrl) setImageUri(urlData.publicUrl);
+        }
+      }
+    }
   };
 
   const handleRegister = async () => {

@@ -99,8 +99,8 @@ export default function SubscriptionScreen() {
         <View className="bg-darkCard border border-darkBorder rounded-3xl p-5 mt-6">
           <Text className="text-slate-400 text-xs uppercase tracking-wider mb-4 font-semibold">What's included</Text>
           {[
-            { feature: 'Items protected', basic: '2', pro: '10', max: '∞' },
-            { feature: 'Tag types', basic: 'NFC only', pro: 'NFC + BLE', max: 'All types' },
+            { feature: 'Items protected', basic: '5', pro: '15', max: '∞' },
+            { feature: 'Tag types', basic: 'NFC', pro: 'BLE', max: 'All types' },
             { feature: 'Scan history', basic: '7 days', pro: '30 days', max: '90 days' },
             { feature: 'Passive BLE tracking', basic: '✕', pro: '✓', max: '✓' },
             { feature: 'Live location share', basic: '✕', pro: '✕', max: '✓' },

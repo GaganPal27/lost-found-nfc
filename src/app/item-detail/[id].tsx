@@ -99,13 +99,22 @@ export default function ItemDetailScreen() {
         {/* Title Row */}
         <View className="flex-row justify-between items-start mb-3">
           <Text className="text-white text-3xl font-bold flex-1 mr-4" numberOfLines={2}>{item.item_name}</Text>
-          <TouchableOpacity
-            onPress={handleDelete}
-            className="bg-red-500/10 border border-red-500/25 px-4 py-2 rounded-xl"
-            activeOpacity={0.7}
-          >
-            <Text className="text-red-400 font-bold text-sm">Delete</Text>
-          </TouchableOpacity>
+          <View className="flex-row items-center gap-2">
+            <TouchableOpacity
+              onPress={() => router.push(`/edit-item/${id}`)}
+              className="bg-primary/10 border border-primary/25 px-4 py-2 rounded-xl"
+              activeOpacity={0.7}
+            >
+              <Text className="text-primary font-bold text-sm">Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDelete}
+              className="bg-red-500/10 border border-red-500/25 px-4 py-2 rounded-xl"
+              activeOpacity={0.7}
+            >
+              <Text className="text-red-400 font-bold text-sm">Delete</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Tags Row */}

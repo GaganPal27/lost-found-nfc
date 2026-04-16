@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Alert, ActivityIndicator, Animated, Easing, StatusBar } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { writeNDEFUrl } from '../../lib/nfc';
+import * as Haptics from 'expo-haptics';
 
 export default function WriteTagScreen() {
   const { nfc_uid, ble_beacon_id, tag_type } = useLocalSearchParams();
@@ -26,22 +27,21 @@ export default function WriteTagScreen() {
     Animated.loop(
       Animated.parallel([
         Animated.sequence([
-          Animated.timing(pulse, { toValue: 1.08, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1.05, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
         ]),
         Animated.sequence([
-          Animated.timing(pulseOpacity, { toValue: 1, duration: 800, useNativeDriver: true }),
-          Animated.timing(pulseOpacity, { toValue: 0.6, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseOpacity, { toValue: 0.2, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseOpacity, { toValue: 0.8, duration: 600, useNativeDriver: true }),
         ]),
-        Animated.loop(Animated.sequence([
-          Animated.timing(ripple1, { toValue: 1, duration: 1400, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-          Animated.timing(ripple1, { toValue: 0, duration: 0, useNativeDriver: true }),
-        ])),
-        Animated.loop(Animated.sequence([
-          Animated.delay(700),
-          Animated.timing(ripple2, { toValue: 1, duration: 1400, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-          Animated.timing(ripple2, { toValue: 0, duration: 0, useNativeDriver: true }),
-        ])),
+        Animated.sequence([
+          Animated.timing(ripple1, { toValue: 0.1, duration: 600, useNativeDriver: true }),
+          Animated.timing(ripple1, { toValue: 0.6, duration: 600, useNativeDriver: true }),
+        ]),
+        Animated.sequence([
+          Animated.timing(ripple2, { toValue: 0.1, duration: 600, useNativeDriver: true }),
+          Animated.timing(ripple2, { toValue: 0.6, duration: 600, useNativeDriver: true }),
+        ]),
       ])
     ).start();
   };
@@ -61,6 +61,7 @@ export default function WriteTagScreen() {
     const wrote = await writeNDEFUrl(url);
     setWriting(false);
     if (wrote) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSuccess(true);
     } else {
       Alert.alert('Write Failed', 'Could not write to NFC tag. Try again.');
@@ -94,14 +95,12 @@ export default function WriteTagScreen() {
             <Animated.View style={{
               position: 'absolute', width: 170, height: 170, borderRadius: 85,
               borderWidth: 1.5, borderColor: '#06b6d4',
-              opacity: writing ? rippleOp(ripple2) : 0.1,
-              transform: [{ scale: writing ? rippleScale(ripple2) : 1 }],
+              opacity: writing ? ripple2 : 0.1,
             }} />
             <Animated.View style={{
               position: 'absolute', width: 130, height: 130, borderRadius: 65,
               borderWidth: 1.5, borderColor: '#22d3ee',
-              opacity: writing ? rippleOp(ripple1) : 0.15,
-              transform: [{ scale: writing ? rippleScale(ripple1) : 1 }],
+              opacity: writing ? ripple1 : 0.15,
             }} />
             <Animated.View style={{
               transform: [{ scale: writing ? pulse : 1 }],

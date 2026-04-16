@@ -75,6 +75,8 @@ export default function ForgotPasswordScreen() {
                     keyboardType="email-address"
                     autoCorrect={false}
                     autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={handleReset}
                   />
                 </View>
 
