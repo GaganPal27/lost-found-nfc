@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, StatusBar, Animated } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, StatusBar, Animated, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../stores/authStore';
 import { useItemStore } from '../../stores/itemStore';
 import { useSubscriptionStore } from '../../stores/subscriptionStore';
@@ -14,103 +15,94 @@ export default function MyItemsScreen() {
   const { tier } = useSubscriptionStore();
   const [refreshing, setRefreshing] = useState(false);
 
-  const fadeIn = useRef(new Animated.Value(0)).current;
+  const headerY = useRef(new Animated.Value(-20)).current;
+  const headerOp = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    if (user?.id) {
-      fetchMyItems(user.id);
-      subscribeToItems(user.id);
-    }
+    Animated.parallel([
+      Animated.timing(headerY, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(headerOp, { toValue: 1, duration: 500, useNativeDriver: true }),
+    ]).start();
+    if (user?.id) { fetchMyItems(user.id); subscribeToItems(user.id); }
     return () => unsubscribeFromItems();
   }, [user]);
 
   const limit = PLAN_LIMITS[tier as keyof typeof PLAN_LIMITS].maxItems;
   const isAtLimit = itemsCount >= limit;
-
-  const handleRefresh = async () => {
-    if (!user?.id) return;
-    setRefreshing(true);
-    await fetchMyItems(user.id);
-    setRefreshing(false);
-  };
-
-  const handleAdd = () => router.push('/register-item');
-
   const usedPct = limit === Infinity ? 0 : Math.min((itemsCount / limit) * 100, 100);
 
+  const tierColors: Record<string, [string, string]> = {
+    max: ['#6366f1', '#8b5cf6'], // Indigo to Purple
+    pro: ['#ec4899', '#f43f5e'], // Pink to Rose
+    basic: ['#94a3b8', '#64748b'], // Slate
+  };
+  const gradColors = tierColors[tier] || tierColors.basic;
+
   return (
-    <View className="flex-1 bg-darkBg">
-      <StatusBar barStyle="light-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#f8f9ff" />
 
-      {/* Header */}
-      <View className="px-6 pt-14 pb-5 border-b border-darkBorder">
-        <View className="flex-row justify-between items-center">
-          <View>
-            <Text className="text-slate-400 text-xs uppercase tracking-widest mb-1">My Items</Text>
-            <Text className="text-white text-3xl font-bold">Protected Items</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => router.push('/profile')}
-            className="w-11 h-11 bg-darkCard border border-darkBorder rounded-full items-center justify-center"
-            activeOpacity={0.7}
-          >
-            <Text className="text-white font-bold text-base">
-              {user?.email?.[0]?.toUpperCase() || 'U'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Plan banner */}
-        {tier !== 'max' && (
-          <Animated.View style={{ opacity: fadeIn }}>
-            <View className="bg-darkCard border border-darkBorder rounded-2xl p-4 mt-4">
-              <View className="flex-row justify-between items-center mb-2">
-                <Text className="text-slate-300 font-semibold text-sm">
-                  {itemsCount} / {limit === Infinity ? '∞' : limit} items used
-                </Text>
-                <TouchableOpacity onPress={() => router.push('/subscription')} activeOpacity={0.7}>
-                  <View className="bg-primary/15 border border-primary/30 px-3 py-1 rounded-full">
-                    <Text className="text-primary text-xs font-bold uppercase tracking-wider">⬆ Upgrade</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-              <View className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                <View className="h-full bg-primary rounded-full" style={{ width: `${usedPct}%` }} />
-              </View>
+      {/* Gradient Header */}
+      <Animated.View style={{ transform: [{ translateY: headerY }], opacity: headerOp }}>
+        <LinearGradient
+          colors={['#f8f9ff', '#ffffff', '#ffffff']}
+          style={styles.header}
+        >
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.headerSub}>Lost & Found Network</Text>
+              <Text style={styles.headerTitle}>My Items</Text>
             </View>
-          </Animated.View>
-        )}
-      </View>
+            <TouchableOpacity onPress={() => router.push('/profile')} style={styles.avatar} activeOpacity={0.8}>
+              <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.avatarGradient}>
+                <Text style={styles.avatarText}>{user?.email?.[0]?.toUpperCase() || 'U'}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+
+          {/* Plan / Quota bar */}
+          <View style={styles.quotaCard}>
+            <View style={styles.quotaRow}>
+              <View style={styles.quotaTierBadge}>
+                <LinearGradient colors={gradColors} style={styles.quotaTierGradient}>
+                  <Text style={styles.quotaTierText}>{tier.toUpperCase()}</Text>
+                </LinearGradient>
+              </View>
+              <Text style={styles.quotaCount}>
+                {itemsCount} / {limit === Infinity ? '∞' : limit} items
+              </Text>
+              {tier !== 'max' && (
+                <TouchableOpacity onPress={() => router.push('/subscription')} style={styles.upgradeBtn} activeOpacity={0.8}>
+                  <Text style={styles.upgradeBtnText}>⬆ Upgrade</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {limit !== Infinity && (
+              <View style={styles.progressTrack}>
+                <Animated.View style={[styles.progressFill, { width: `${usedPct}%`, backgroundColor: isAtLimit ? '#f43f5e' : '#6366f1' }]} />
+              </View>
+            )}
+          </View>
+        </LinearGradient>
+      </Animated.View>
 
       <FlatList
         data={items}
-        keyExtractor={(item) => item.id}
+        keyExtractor={i => i.id}
         renderItem={({ item }) => <ItemCard item={item} />}
-        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#06b6d4"
-            colors={['#06b6d4']}
-          />
-        }
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 120 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); if (user?.id) await fetchMyItems(user.id); setRefreshing(false); }} tintColor="#6366f1" colors={['#6366f1']} />}
         ListEmptyComponent={
-          <View className="items-center justify-center py-24 mt-4">
-            <View className="w-24 h-24 bg-darkCard border border-darkBorder rounded-full items-center justify-center mb-6">
-              <Text className="text-4xl">🎒</Text>
+          <View style={styles.empty}>
+            <View style={styles.emptyIcon}>
+              <Text style={{ fontSize: 44 }}>🎒</Text>
             </View>
-            <Text className="text-white text-xl font-bold mb-2">No items yet</Text>
-            <Text className="text-slate-400 text-center px-10 leading-6 mb-8">
-              Add your first item and let the{'\n'}Lost & Found Network protect it.
-            </Text>
-            <TouchableOpacity
-              className="bg-primary px-8 py-4 rounded-2xl"
-              onPress={handleAdd}
-              activeOpacity={0.85}
-            >
-              <Text className="text-slate-900 font-bold tracking-wide text-base">+ Add First Item</Text>
+            <Text style={styles.emptyTitle}>Nothing protected yet</Text>
+            <Text style={styles.emptySubtitle}>Register your first item and let the{'\n'}global tracking network watch over it.</Text>
+            <TouchableOpacity onPress={() => router.push('/register-item')} style={styles.emptyBtn} activeOpacity={0.85}>
+              <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.emptyBtnGrad}>
+                <Text style={styles.emptyBtnText}>+ Register First Item</Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         }
@@ -118,15 +110,43 @@ export default function MyItemsScreen() {
 
       {/* FAB */}
       {items.length > 0 && (
-        <TouchableOpacity
-          className="absolute bottom-8 right-6 bg-primary w-16 h-16 rounded-full items-center justify-center"
-          style={{ shadowColor: '#06b6d4', shadowOpacity: 0.45, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 8 }}
-          onPress={handleAdd}
-          activeOpacity={0.85}
-        >
-          <Text className="text-slate-900 text-3xl font-bold" style={{ lineHeight: 36 }}>+</Text>
+        <TouchableOpacity onPress={() => router.push('/register-item')} style={styles.fab} activeOpacity={0.88}>
+          <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.fabGrad}>
+            <Text style={styles.fabText}>+</Text>
+          </LinearGradient>
         </TouchableOpacity>
       )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f8f9ff' },
+  header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  headerSub: { color: '#64748b', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 2 },
+  headerTitle: { color: '#0f172a', fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
+  avatar: { width: 44, height: 44, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: '#ffffff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 6, elevation: 3 },
+  avatarGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#ffffff', fontWeight: '900', fontSize: 17 },
+  quotaCard: { backgroundColor: '#ffffff', borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', padding: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  quotaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  quotaTierBadge: { borderRadius: 12, overflow: 'hidden' },
+  quotaTierGradient: { paddingHorizontal: 10, paddingVertical: 4 },
+  quotaTierText: { color: '#ffffff', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  quotaCount: { color: '#475569', fontSize: 12, fontWeight: '600', flex: 1 },
+  upgradeBtn: { backgroundColor: 'rgba(99,102,241,0.1)', borderWidth: 1, borderColor: 'rgba(99,102,241,0.2)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
+  upgradeBtnText: { color: '#6366f1', fontSize: 11, fontWeight: '800' },
+  progressTrack: { height: 6, backgroundColor: '#e0e7ff', borderRadius: 4, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 4 },
+  empty: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 32 },
+  emptyIcon: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginBottom: 24, shadowColor: '#6366f1', shadowOpacity: 0.08, shadowRadius: 20, elevation: 4 },
+  emptyTitle: { color: '#0f172a', fontSize: 20, fontWeight: '800', marginBottom: 10 },
+  emptySubtitle: { color: '#64748b', textAlign: 'center', fontSize: 14, lineHeight: 22, marginBottom: 28 },
+  emptyBtn: { borderRadius: 24, overflow: 'hidden', shadowColor: '#6366f1', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
+  emptyBtnGrad: { paddingHorizontal: 28, paddingVertical: 14 },
+  emptyBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 15, letterSpacing: 0.3 },
+  fab: { position: 'absolute', bottom: 28, right: 20, width: 64, height: 64, borderRadius: 32, overflow: 'hidden', shadowColor: '#6366f1', shadowOpacity: 0.4, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 12 },
+  fabGrad: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  fabText: { color: '#ffffff', fontSize: 32, fontWeight: '300', lineHeight: 38 },
+});

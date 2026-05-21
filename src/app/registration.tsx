@@ -11,6 +11,7 @@ export default function RegistrationScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [tosAccepted, setTosAccepted] = useState(false);
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const confirmRef = useRef<TextInput>(null);
@@ -37,6 +38,10 @@ export default function RegistrationScreen() {
   const strength = getPasswordStrength();
 
   const handleRegister = async () => {
+    if (!tosAccepted) {
+      Alert.alert('Terms Required', 'Please read and accept the Terms of Service to create an account.');
+      return;
+    }
     if (!name.trim()) {
       Alert.alert('Required', 'Please enter your name.');
       return;
@@ -59,7 +64,7 @@ export default function RegistrationScreen() {
       email: email.trim(),
       password,
       options: {
-        data: { full_name: name.trim() },
+        data: { full_name: name.trim(), tos_accepted_at: new Date().toISOString() },
       },
     });
 
@@ -206,18 +211,47 @@ export default function RegistrationScreen() {
               <Text className="text-red-400 text-xs mb-4 -mt-4">Passwords do not match</Text>
             )}
 
-            {/* Create Button */}
+          {/* Terms of Service Checkbox */}
+          <View className="flex-row items-start mt-2 mb-5 gap-3">
             <TouchableOpacity
-              className={`w-full bg-primary rounded-2xl py-4 items-center ${loading ? 'opacity-60' : ''}`}
-              onPress={handleRegister}
-              disabled={loading}
-              activeOpacity={0.85}
-              style={{ shadowColor: '#06b6d4', shadowOpacity: 0.35, shadowRadius: 12, elevation: 5 }}
+              onPress={() => setTosAccepted(!tosAccepted)}
+              activeOpacity={0.7}
+              style={{
+                width: 22, height: 22, borderRadius: 6, marginTop: 2,
+                borderWidth: 2,
+                borderColor: tosAccepted ? '#06b6d4' : '#475569',
+                backgroundColor: tosAccepted ? '#06b6d4' : 'transparent',
+                alignItems: 'center', justifyContent: 'center',
+              }}
             >
-              <Text className="text-slate-900 font-bold text-lg tracking-wide">
-                {loading ? 'Creating Account...' : 'Create Free Account'}
-              </Text>
+              {tosAccepted && <Text style={{ color: '#0f172a', fontWeight: '900', fontSize: 14, lineHeight: 16 }}>✓</Text>}
             </TouchableOpacity>
+            <View className="flex-1">
+              <Text className="text-slate-400 text-sm leading-5">
+                I have read and agree to the{' '}
+                <Text
+                  className="text-primary font-semibold"
+                  onPress={() => router.push('/terms-of-service')}
+                >
+                  Terms of Service
+                </Text>
+                {', including provisions on data collection, location sharing, and finder communication.'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Create Button */}
+          <TouchableOpacity
+            className={`w-full rounded-2xl py-4 items-center ${tosAccepted && !loading ? 'bg-primary' : 'bg-slate-700'}`}
+            onPress={handleRegister}
+            disabled={loading || !tosAccepted}
+            activeOpacity={0.85}
+            style={tosAccepted ? { shadowColor: '#06b6d4', shadowOpacity: 0.35, shadowRadius: 12, elevation: 5 } : {}}
+          >
+            <Text className={`font-bold text-lg tracking-wide ${tosAccepted ? 'text-slate-900' : 'text-slate-500'}`}>
+              {loading ? 'Creating Account...' : 'Create Free Account'}
+            </Text>
+          </TouchableOpacity>
           </View>
 
           {/* What's Included */}
@@ -249,8 +283,8 @@ export default function RegistrationScreen() {
             </Text>
           </TouchableOpacity>
 
-          <Text className="text-slate-700 text-xs mt-6 text-center px-6">
-            By creating an account you agree to our Terms of Service and Privacy Policy.
+          <Text className="text-slate-700 text-xs mt-3 text-center px-2">
+            Your data is protected under our Privacy Policy.
           </Text>
         </Animated.View>
       </ScrollView>

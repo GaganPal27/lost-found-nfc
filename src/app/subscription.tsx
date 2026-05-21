@@ -11,9 +11,9 @@ import { supabase } from '../lib/supabase';
 import Purchases from 'react-native-purchases';
 
 const PLAN_PERKS = {
-  basic:  { price: 'Free', color: 'text-slate-300', desc: 'Perfect for getting started' },
-  pro:    { price: '$4.99/mo', color: 'text-cyan-400', desc: 'For the frequent traveller' },
-  max:    { price: '$9.99/mo', color: 'text-purple-400', desc: 'Ultimate protection' },
+  basic:  { price: 'Free', color: 'text-slate-500', desc: 'Perfect for getting started' },
+  pro:    { price: '$4.99/mo', color: 'text-blue-600', desc: 'For the frequent traveller' },
+  max:    { price: '$9.99/mo', color: 'text-red-600', desc: 'Ultimate protection' },
 };
 
 export default function SubscriptionScreen() {
@@ -65,8 +65,8 @@ export default function SubscriptionScreen() {
   const selectedPerk = PLAN_PERKS[selectedTier as keyof typeof PLAN_PERKS];
 
   return (
-    <View className="flex-1 bg-darkBg">
-      <StatusBar barStyle="light-content" />
+    <View className="flex-1 bg-slate-50">
+      <StatusBar barStyle="dark-content" />
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 180, paddingTop: 60 }}>
         {/* Back */}
@@ -76,18 +76,18 @@ export default function SubscriptionScreen() {
         </TouchableOpacity>
 
         {/* Header */}
-        <Text className="text-slate-400 text-xs uppercase tracking-widest mb-2">Plans</Text>
-        <Text className="text-white text-4xl font-bold mb-2">Choose your{'\n'}protection level</Text>
-        <Text className="text-slate-400 text-base mb-8 leading-6">
+        <Text className="text-slate-500 text-xs uppercase tracking-widest mb-2 font-bold">Plans</Text>
+        <Text className="text-slate-900 text-4xl font-black mb-2">Choose your{'\n'}protection level</Text>
+        <Text className="text-slate-600 text-base mb-8 leading-6 font-medium">
           Protect your most valuable items with{'\n'}the Lost & Found global network.
         </Text>
 
         {/* Current plan badge */}
         {currentTier !== 'basic' && (
-          <View className="bg-primary/15 border border-primary/30 rounded-2xl px-4 py-3 mb-6 flex-row items-center">
+          <View className="bg-primary/10 border border-primary/20 rounded-2xl px-4 py-3 mb-6 flex-row items-center">
             <View className="w-2 h-2 rounded-full bg-primary mr-3" />
-            <Text className="text-primary font-semibold text-sm">
-              Currently on <Text className="font-bold uppercase">{currentTier}</Text> plan
+            <Text className="text-primary font-bold text-sm">
+              Currently on <Text className="font-black uppercase">{currentTier}</Text> plan
             </Text>
           </View>
         )}
@@ -96,8 +96,8 @@ export default function SubscriptionScreen() {
         <PlanSelector selectedTier={selectedTier} onSelectTier={setSelectedTier} />
 
         {/* Feature Comparison */}
-        <View className="bg-darkCard border border-darkBorder rounded-3xl p-5 mt-6">
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-4 font-semibold">What's included</Text>
+        <View className="bg-white border border-slate-200 rounded-3xl p-5 mt-6 shadow-sm">
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-4 font-bold">What's included</Text>
           {[
             { feature: 'Items protected', basic: '5', pro: '15', max: '∞' },
             { feature: 'Tag types', basic: 'NFC', pro: 'BLE', max: 'All types' },
@@ -105,32 +105,31 @@ export default function SubscriptionScreen() {
             { feature: 'Passive BLE tracking', basic: '✕', pro: '✓', max: '✓' },
             { feature: 'Live location share', basic: '✕', pro: '✕', max: '✓' },
           ].map((row, i) => (
-            <View key={i} className={`flex-row items-center py-3 ${i !== 4 ? 'border-b border-slate-700' : ''}`}>
-              <Text className="text-slate-400 text-sm flex-1">{row.feature}</Text>
-              <Text className={`text-xs font-bold w-16 text-center ${selectedTier === 'basic' ? 'text-white' : 'text-slate-500'}`}>{row.basic}</Text>
-              <Text className={`text-xs font-bold w-16 text-center ${selectedTier === 'pro' ? 'text-cyan-400' : 'text-slate-500'}`}>{row.pro}</Text>
-              <Text className={`text-xs font-bold w-16 text-center ${selectedTier === 'max' ? 'text-purple-400' : 'text-slate-500'}`}>{row.max}</Text>
+            <View key={i} className={`flex-row items-center py-3 ${i !== 4 ? 'border-b border-slate-100' : ''}`}>
+              <Text className="text-slate-600 text-sm flex-1 font-medium">{row.feature}</Text>
+              <Text className={`text-xs font-bold w-16 text-center ${selectedTier === 'basic' ? 'text-slate-900' : 'text-slate-400'}`}>{row.basic}</Text>
+              <Text className={`text-xs font-bold w-16 text-center ${selectedTier === 'pro' ? 'text-blue-600' : 'text-slate-400'}`}>{row.pro}</Text>
+              <Text className={`text-xs font-bold w-16 text-center ${selectedTier === 'max' ? 'text-red-600' : 'text-slate-400'}`}>{row.max}</Text>
             </View>
           ))}
         </View>
       </ScrollView>
 
       {/* Bottom CTA */}
-      <View className="absolute bottom-0 w-full bg-darkBg border-t border-darkBorder px-6 pt-4 pb-8">
+      <View className="absolute bottom-0 w-full bg-white border-t border-slate-200 px-6 pt-4 pb-8 shadow-lg">
         <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-white font-bold text-base capitalize">{selectedTier} Plan</Text>
+          <Text className="text-slate-900 font-bold text-base capitalize">{selectedTier} Plan</Text>
           <Text className={`font-bold text-lg ${selectedPerk?.color}`}>{selectedPerk?.price}</Text>
         </View>
 
         <TouchableOpacity
-          className={`w-full bg-primary py-4 rounded-2xl items-center flex-row justify-center mb-3 ${loading ? 'opacity-60' : ''}`}
+          className={`w-full bg-primary py-4 rounded-2xl items-center flex-row justify-center mb-3 shadow-md shadow-primary/30 ${loading ? 'opacity-60' : ''}`}
           onPress={handlePurchase}
           disabled={loading}
           activeOpacity={0.85}
-          style={{ shadowColor: '#06b6d4', shadowOpacity: 0.35, shadowRadius: 12, elevation: 5 }}
         >
-          {loading && <ActivityIndicator color="#0f172a" className="mr-3" />}
-          <Text className="text-slate-900 font-bold text-lg">
+          {loading && <ActivityIndicator color="#ffffff" className="mr-3" />}
+          <Text className="text-white font-bold text-lg">
             {selectedTier === 'basic' ? 'Continue with Basic — Free' : `Get ${selectedTier.toUpperCase()}`}
           </Text>
         </TouchableOpacity>

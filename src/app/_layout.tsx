@@ -1,10 +1,25 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
-import { StatusBar } from 'react-native';
+import { StatusBar, Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
 import '../../global.css';
+
+const safeRegisterPushToken = async (userId: string) => {
+  try {
+    const { default: Notifications } = await import('expo-notifications');
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') return;
+    const token = (await Notifications.getExpoPushTokenAsync()).data;
+    await supabase.from('push_tokens').upsert(
+      { user_id: userId, token, platform: Platform.OS },
+      { onConflict: 'user_id,token' }
+    );
+  } catch (e) {
+    console.warn('Push token registration failed:', e);
+  }
+};
 
 // Safe wrappers for native-only SDKs (no-op on web)
 const safeInitRevenueCat = async () => {
@@ -22,20 +37,44 @@ export default function RootLayout() {
   const { refreshTier, initialized: subInitialized, tier } = useSubscriptionStore();
   const segments = useSegments();
   const router = useRouter();
+  const notifListenerRef = useRef<any>(null);
 
   useEffect(() => {
     safeInitRevenueCat();
-    refreshTier();
 
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: any } }) => {
-      setSession(session);
+    supabase.auth.getSession().then(async ({ data: { session } }: { data: { session: any } }) => {
+      await setSession(session);
+      await refreshTier();
+      if (session?.user?.id) safeRegisterPushToken(session.user.id);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-      setSession(session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: any, session: any) => {
+      await setSession(session);
+      await refreshTier();
+      if (session?.user?.id) safeRegisterPushToken(session.user.id);
     });
 
-    return () => subscription.unsubscribe();
+    // Navigate to conversation when user taps a push notification
+    const setupNotifListener = async () => {
+      try {
+        const { default: Notifications } = await import('expo-notifications');
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: true,
+          }),
+        });
+        notifListenerRef.current = Notifications.addNotificationResponseReceivedListener((response) => {
+          const convId = response.notification.request.content.data?.conversation_id;
+          if (convId) router.push(`/conversation/${convId}`);
+        });
+      } catch {}
+    };
+    setupNotifListener();
+
+    return () => {
+      subscription.unsubscribe();
+      if (notifListenerRef.current) notifListenerRef.current.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -52,7 +91,7 @@ export default function RootLayout() {
     if (!authInitialized || !subInitialized) return;
 
     // Routes accessible without authentication
-    const publicRoutes = ['login', 'registration', 'forgot-password', 'item'];
+    const publicRoutes = ['login', 'registration', 'forgot-password', 'item', 'terms-of-service', 'finder-connect'];
     const inPublicRoute = publicRoutes.includes(segments[0] as string);
     const inAuthScreen = publicRoutes.slice(0, 3).includes(segments[0] as string);
 

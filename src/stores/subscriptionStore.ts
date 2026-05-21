@@ -9,8 +9,15 @@ interface SubscriptionState {
   setTier: (tier: SubscriptionTier) => void;
 }
 
+import { useAuthStore } from './authStore';
+
 // Safe tier refresh — works on web (no RevenueCat) and on native (with RevenueCat)
 async function safGetTier(): Promise<SubscriptionTier> {
+  // Implicitly grant Max tier to all admins
+  if (useAuthStore.getState().isAdmin) {
+    return 'max';
+  }
+
   try {
     // RevenueCat only works on native (iOS/Android)
     // On web or when not configured, it will throw — we catch and return 'basic'

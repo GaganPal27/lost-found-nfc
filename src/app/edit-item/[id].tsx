@@ -61,15 +61,15 @@ export default function EditItemScreen() {
 
   if (loadingInitial) {
     return (
-      <View className="flex-1 bg-darkBg justify-center items-center">
-        <ActivityIndicator size="large" color="#06b6d4" />
+      <View className="flex-1 bg-slate-50 justify-center items-center">
+        <ActivityIndicator size="large" color="#e11d48" />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-darkBg">
-      <StatusBar barStyle="light-content" />
+    <View className="flex-1 bg-slate-50">
+      <StatusBar barStyle="dark-content" />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 80, paddingTop: 60 }} keyboardShouldPersistTaps="handled">
         {/* Back */}
         <TouchableOpacity onPress={() => router.back()} className="mb-6 flex-row items-center" activeOpacity={0.7}>
@@ -77,17 +77,17 @@ export default function EditItemScreen() {
           <Text className="text-primary font-semibold">Cancel</Text>
         </TouchableOpacity>
 
-        <Text className="text-slate-400 text-xs uppercase tracking-widest mb-2">Manage</Text>
-        <Text className="text-white text-3xl font-bold mb-8">Edit Item</Text>
+        <Text className="text-slate-500 text-xs uppercase tracking-widest mb-2 font-bold">Manage</Text>
+        <Text className="text-slate-900 text-3xl font-black mb-8">Edit Item</Text>
 
         {/* Item Name */}
         <View className="mb-5">
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Item Name *</Text>
-          <View className="bg-darkCard border border-darkBorder rounded-2xl px-4 flex-row items-center">
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-2 font-bold">Item Name *</Text>
+          <View className="bg-white border border-slate-200 rounded-2xl px-4 flex-row items-center shadow-sm">
             <TextInput
-              className="flex-1 text-white py-4 text-base"
+              className="flex-1 text-slate-900 py-4 text-base font-medium"
               placeholder="e.g. Black Leather Wallet"
-              placeholderTextColor="#475569"
+              placeholderTextColor="#94a3b8"
               value={name}
               onChangeText={setName}
             />
@@ -96,21 +96,21 @@ export default function EditItemScreen() {
 
         {/* Category */}
         <View className="mb-5">
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-3 font-semibold">Category</Text>
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-3 font-bold">Category</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View className="flex-row gap-2">
               {CATEGORIES.map(cat => (
                 <TouchableOpacity
                   key={cat}
                   onPress={() => setCategory(cat)}
-                  className={`px-4 py-2 rounded-full border ${
+                  className={`px-4 py-2 rounded-full border shadow-sm ${
                     category === cat
-                      ? 'bg-primary/20 border-primary/50'
-                      : 'bg-darkCard border-darkBorder'
+                      ? 'bg-primary/10 border-primary/20 shadow-primary/10'
+                      : 'bg-white border-slate-200'
                   }`}
                   activeOpacity={0.7}
                 >
-                  <Text className={`font-semibold text-sm ${category === cat ? 'text-primary' : 'text-slate-400'}`}>
+                  <Text className={`font-bold text-sm ${category === cat ? 'text-primary' : 'text-slate-500'}`}>
                     {cat}
                   </Text>
                 </TouchableOpacity>
@@ -121,12 +121,12 @@ export default function EditItemScreen() {
 
         {/* Color */}
         <View className="mb-5">
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Color</Text>
-          <View className="bg-darkCard border border-darkBorder rounded-2xl px-4">
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-2 font-bold">Color</Text>
+          <View className="bg-white border border-slate-200 rounded-2xl px-4 shadow-sm">
             <TextInput
-              className="text-white py-4 text-base"
+              className="text-slate-900 py-4 text-base font-medium"
               placeholder="e.g. Black, Blue, Silver..."
-              placeholderTextColor="#475569"
+              placeholderTextColor="#94a3b8"
               value={color}
               onChangeText={setColor}
             />
@@ -135,12 +135,12 @@ export default function EditItemScreen() {
 
         {/* Description */}
         <View className="mb-8">
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Description / Details</Text>
-          <View className="bg-darkCard border border-darkBorder rounded-2xl px-4">
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-2 font-bold">Description / Details</Text>
+          <View className="bg-white border border-slate-200 rounded-2xl px-4 shadow-sm">
             <TextInput
-              className="text-white py-4 text-base"
+              className="text-slate-900 py-4 text-base font-medium"
               placeholder="Distinguishing features, damage, marks..."
-              placeholderTextColor="#475569"
+              placeholderTextColor="#94a3b8"
               value={description}
               onChangeText={setDescription}
               multiline
@@ -153,15 +153,14 @@ export default function EditItemScreen() {
 
         {/* Save */}
         <TouchableOpacity
-          className={`w-full bg-primary py-4 rounded-2xl items-center ${saving ? 'opacity-60' : ''}`}
+          className={`w-full bg-primary py-4 rounded-2xl items-center shadow-md shadow-primary/30 ${saving ? 'opacity-60' : ''}`}
           onPress={handleSave}
           disabled={saving}
           activeOpacity={0.85}
-          style={{ shadowColor: '#06b6d4', shadowOpacity: 0.35, shadowRadius: 12, elevation: 5 }}
         >
           {saving
-            ? <ActivityIndicator color="#0f172a" />
-            : <Text className="text-slate-900 font-bold text-lg tracking-wide">Save Changes</Text>
+            ? <ActivityIndicator color="#ffffff" />
+            : <Text className="text-white font-bold text-lg tracking-wide">Save Changes</Text>
           }
         </TouchableOpacity>
       </ScrollView>

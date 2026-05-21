@@ -15,6 +15,10 @@ export interface Item {
   last_seen_lat: number;
   last_seen_lng: number;
   last_seen_at: string;
+  last_seen_source: string | null;
+  tracking_networks: string[];
+  fmdn_registered: boolean;
+  openhaystack_registered: boolean;
 }
 
 interface ItemState {

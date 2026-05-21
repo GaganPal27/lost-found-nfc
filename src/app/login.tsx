@@ -53,43 +53,43 @@ export default function LoginScreen() {
 
   return (
     <View className="flex-1 bg-darkBg">
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48 }}
         keyboardShouldPersistTaps="handled"
       >
         {/* Decorative NFC rings */}
         <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
-          <Animated.View style={{ opacity: pulse3 }} className="absolute w-80 h-80 rounded-full border border-cyan-500/10" />
-          <Animated.View style={{ opacity: pulse2 }} className="absolute w-56 h-56 rounded-full border border-cyan-500/15" />
-          <Animated.View style={{ opacity: pulse1 }} className="absolute w-36 h-36 rounded-full border border-cyan-500/20" />
+          <Animated.View style={{ opacity: pulse3 }} className="absolute w-80 h-80 rounded-full border border-primary/5" />
+          <Animated.View style={{ opacity: pulse2 }} className="absolute w-56 h-56 rounded-full border border-primary/10" />
+          <Animated.View style={{ opacity: pulse1 }} className="absolute w-36 h-36 rounded-full border border-primary/20" />
         </View>
 
         {/* Logo */}
         <View className="items-center mb-10">
-          <View className="w-16 h-16 bg-darkCard border border-darkBorder rounded-2xl items-center justify-center mb-4">
+          <View className="w-16 h-16 bg-white border border-slate-200 rounded-2xl items-center justify-center mb-4 shadow-sm">
             <Text className="text-3xl">📡</Text>
           </View>
-          <Text className="text-white text-3xl font-bold tracking-tight select-none">Lost & Found</Text>
-          <Text className="text-darkMuted text-sm mt-1 tracking-widest uppercase select-none">NFC Network</Text>
+          <Text className="text-slate-900 text-3xl font-black tracking-tight select-none">Lost & Found</Text>
+          <Text className="text-slate-500 text-sm mt-1 tracking-widest uppercase font-bold select-none">NFC Network</Text>
         </View>
 
         {/* Heading */}
-        <Text className="text-white text-4xl font-bold text-center mb-2 select-none">Welcome Back</Text>
-        <Text className="text-darkMuted text-base text-center mb-10 px-4 select-none">
+        <Text className="text-slate-900 text-4xl font-black text-center mb-2 select-none">Welcome Back</Text>
+        <Text className="text-slate-500 text-base text-center mb-10 px-4 font-medium select-none">
           Sign in to protect your items{'\n'}and manage your network.
         </Text>
 
         {/* Form Card */}
-        <View className="w-full bg-darkCard border border-darkBorder rounded-3xl p-6 mb-4">
+        <View className="w-full bg-white border border-slate-200 rounded-3xl p-6 mb-4 shadow-sm">
           {/* Email */}
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold select-none">Email</Text>
-          <View className="flex-row items-center bg-slate-800 border border-slate-700 rounded-2xl px-4 mb-4">
-            <Text className="text-darkMuted text-lg mr-3">✉️</Text>
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-2 font-bold select-none">Email</Text>
+          <View className="flex-row items-center bg-darkBg border border-slate-100 rounded-2xl px-4 mb-4 shadow-sm">
+            <Text className="text-slate-400 text-lg mr-3">✉️</Text>
             <TextInput
-              className="flex-1 text-white text-base py-4"
+              className="flex-1 text-slate-900 text-base py-4 font-medium"
               placeholder="your@email.com"
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#94a3b8"
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -102,11 +102,11 @@ export default function LoginScreen() {
           </View>
 
           {/* Password */}
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold select-none">Password</Text>
-          <View className="flex-row items-center bg-slate-800 border border-slate-700 rounded-2xl px-4 mb-2">
-            <Text className="text-darkMuted text-lg mr-3">🔒</Text>
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-2 font-bold select-none">Password</Text>
+          <View className="flex-row items-center bg-darkBg border border-slate-100 rounded-2xl px-4 mb-2 shadow-sm">
+            <Text className="text-slate-400 text-lg mr-3">🔒</Text>
             <TextInput
-              className="flex-1 text-white text-base py-4"
+              className="flex-1 text-slate-900 text-base py-4 font-medium"
               placeholder="Enter your password"
               placeholderTextColor="#64748b"
               value={password}
@@ -119,7 +119,7 @@ export default function LoginScreen() {
               onSubmitEditing={handleLogin}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
-              <Text className="text-slate-500 text-sm font-semibold">{showPassword ? 'Hide' : 'Show'}</Text>
+              <Text className="text-slate-500 text-sm font-bold">{showPassword ? 'Hide' : 'Show'}</Text>
             </TouchableOpacity>
           </View>
 
@@ -129,18 +129,17 @@ export default function LoginScreen() {
             className="self-end mb-5"
             activeOpacity={0.7}
           >
-            <Text className="text-primary text-sm font-semibold">Forgot password?</Text>
+            <Text className="text-primary text-sm font-bold">Forgot password?</Text>
           </TouchableOpacity>
 
           {/* Sign In Button */}
           <TouchableOpacity
-            className={`w-full bg-primary rounded-2xl py-4 items-center ${loading ? 'opacity-60' : ''}`}
+            className={`w-full bg-primary rounded-2xl py-4 items-center shadow-md shadow-primary/30 ${loading ? 'opacity-60' : ''}`}
             onPress={handleLogin}
             disabled={loading}
             activeOpacity={0.85}
-            style={{ shadowColor: '#06b6d4', shadowOpacity: 0.35, shadowRadius: 12, elevation: 5 }}
           >
-            <Text className="text-slate-900 font-bold text-lg tracking-wide">
+            <Text className="text-white font-bold text-lg tracking-wide">
               {loading ? 'Signing in...' : 'Sign In'}
             </Text>
           </TouchableOpacity>
@@ -148,9 +147,9 @@ export default function LoginScreen() {
 
         {/* Divider */}
         <View className="flex-row items-center w-full mb-4">
-          <View className="flex-1 h-px bg-darkBorder" />
-          <Text className="text-darkMuted text-xs px-4 uppercase tracking-widest">or</Text>
-          <View className="flex-1 h-px bg-darkBorder" />
+          <View className="flex-1 h-px bg-slate-200" />
+          <Text className="text-slate-400 text-xs px-4 uppercase tracking-widest font-bold">or</Text>
+          <View className="flex-1 h-px bg-slate-200" />
         </View>
 
         {/* Sign Up Link */}
@@ -159,13 +158,13 @@ export default function LoginScreen() {
           activeOpacity={0.7}
           className="py-2"
         >
-          <Text className="text-darkMuted text-base text-center">
+          <Text className="text-slate-600 text-base text-center font-medium">
             Don't have an account?{'  '}
             <Text className="text-primary font-bold">Create one — it's free</Text>
           </Text>
         </TouchableOpacity>
 
-        <Text className="text-slate-700 text-xs mt-10 text-center">
+        <Text className="text-slate-400 text-xs mt-10 text-center font-medium">
           By signing in you agree to our Terms & Privacy Policy
         </Text>
       </ScrollView>

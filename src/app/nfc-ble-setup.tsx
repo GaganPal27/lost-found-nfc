@@ -70,8 +70,8 @@ export default function NFCBLESetupScreen() {
   const stepIdx = steps.indexOf(currentStep);
 
   return (
-    <View className="flex-1 bg-darkBg">
-      <StatusBar barStyle="light-content" />
+    <View className="flex-1 bg-slate-50">
+      <StatusBar barStyle="dark-content" />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 60, paddingTop: 60 }}>
         {/* Back */}
         <TouchableOpacity onPress={() => router.back()} className="mb-8 flex-row items-center" activeOpacity={0.7}>
@@ -80,9 +80,9 @@ export default function NFCBLESetupScreen() {
         </TouchableOpacity>
 
         {/* Header */}
-        <Text className="text-slate-400 text-xs uppercase tracking-widest mb-2">NFC + BLE Tag</Text>
-        <Text className="text-white text-3xl font-bold mb-2">Setup Combo Tag</Text>
-        <Text className="text-slate-400 text-sm mb-8 leading-6">
+        <Text className="text-slate-500 text-xs uppercase tracking-widest mb-2 font-bold">NFC + BLE Tag</Text>
+        <Text className="text-slate-900 text-3xl font-black mb-2">Setup Combo Tag</Text>
+        <Text className="text-slate-500 text-sm mb-8 leading-6 font-medium">
           Your item uses both NFC and BLE. Follow these 2 steps to fully activate it.
         </Text>
 
@@ -91,21 +91,21 @@ export default function NFCBLESetupScreen() {
           {['NFC Write', 'BLE Config', 'Done'].map((label, i) => (
             <View key={i} className="flex-1 items-center">
               <View className="flex-row items-center w-full">
-                {i > 0 && <View className={`flex-1 h-0.5 ${i <= stepIdx ? 'bg-primary' : 'bg-slate-700'}`} />}
+                {i > 0 && <View className={`flex-1 h-0.5 ${i <= stepIdx ? 'bg-primary' : 'bg-slate-200'}`} />}
                 <View className={`w-8 h-8 rounded-full items-center justify-center border-2 ${
                   i < stepIdx ? 'bg-primary border-primary' :
-                  i === stepIdx ? 'border-primary bg-primary/20' :
-                  'border-slate-700 bg-darkCard'
+                  i === stepIdx ? 'border-primary bg-primary/10' :
+                  'border-slate-300 bg-white'
                 }`}>
                   {i < stepIdx ? (
-                    <Text className="text-slate-900 font-bold text-xs">✓</Text>
+                    <Text className="text-white font-bold text-xs">✓</Text>
                   ) : (
-                    <Text className={`font-bold text-xs ${i === stepIdx ? 'text-primary' : 'text-slate-500'}`}>{i + 1}</Text>
+                    <Text className={`font-bold text-xs ${i === stepIdx ? 'text-primary' : 'text-slate-400'}`}>{i + 1}</Text>
                   )}
                 </View>
-                {i < 2 && <View className={`flex-1 h-0.5 ${i < stepIdx ? 'bg-primary' : 'bg-slate-700'}`} />}
+                {i < 2 && <View className={`flex-1 h-0.5 ${i < stepIdx ? 'bg-primary' : 'bg-slate-200'}`} />}
               </View>
-              <Text className={`text-xs mt-2 font-semibold ${i === stepIdx ? 'text-primary' : i < stepIdx ? 'text-slate-400' : 'text-slate-600'}`}>
+              <Text className={`text-xs mt-2 font-bold ${i === stepIdx ? 'text-primary' : i < stepIdx ? 'text-slate-600' : 'text-slate-400'}`}>
                 {label}
               </Text>
             </View>
@@ -114,10 +114,10 @@ export default function NFCBLESetupScreen() {
 
         {/* Step 1: NFC Write */}
         {currentStep === 'nfc' && (
-          <View className="bg-darkCard border border-darkBorder rounded-3xl p-6">
+          <View className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
             <View className="items-center mb-8">
-              <Text className="text-white text-xl font-bold mb-2">Step 1: Program NFC Tag</Text>
-              <Text className="text-slate-400 text-sm text-center leading-6">
+              <Text className="text-slate-900 text-xl font-bold mb-2">Step 1: Program NFC Tag</Text>
+              <Text className="text-slate-500 text-sm text-center leading-6 font-medium">
                 Hold the back of your phone against the NFC sticker to write the tracking link.
               </Text>
             </View>
@@ -138,8 +138,8 @@ export default function NFCBLESetupScreen() {
               }} />
               <Animated.View style={{ transform: [{ scale: nfcWriting ? pulse : 1 }] }}>
                 <View
-                  className={`w-24 h-24 rounded-full items-center justify-center border-2 ${nfcDone ? 'bg-green-500/15 border-green-500/40' : 'bg-primary/15 border-primary/50'}`}
-                  style={{ shadowColor: nfcDone ? '#22c55e' : '#06b6d4', shadowOpacity: 0.5, shadowRadius: 16, elevation: 5 }}
+                  className={`w-24 h-24 rounded-full items-center justify-center border-2 ${nfcDone ? 'bg-green-100 border-green-300' : 'bg-primary/10 border-primary/30'}`}
+                  style={{ shadowColor: nfcDone ? '#22c55e' : '#e11d48', shadowOpacity: 0.2, shadowRadius: 16, elevation: 5 }}
                 >
                   <Text className="text-4xl">{nfcDone ? '✅' : '📱'}</Text>
                 </View>
@@ -147,21 +147,20 @@ export default function NFCBLESetupScreen() {
             </View>
 
             {nfcDone ? (
-              <View className="bg-green-500/10 border border-green-500/25 rounded-2xl p-4 items-center">
-                <Text className="text-green-400 font-bold">NFC tag written successfully!</Text>
-                <Text className="text-slate-400 text-xs mt-1">Moving to BLE setup...</Text>
+              <View className="bg-green-50 border border-green-200 rounded-2xl p-4 items-center">
+                <Text className="text-green-700 font-bold">NFC tag written successfully!</Text>
+                <Text className="text-slate-500 text-xs mt-1 font-medium">Moving to BLE setup...</Text>
               </View>
             ) : (
               <TouchableOpacity
-                className={`w-full bg-primary py-4 rounded-2xl items-center ${nfcWriting ? 'opacity-60' : ''}`}
+                className={`w-full bg-primary py-4 rounded-2xl items-center shadow-md shadow-primary/30 ${nfcWriting ? 'opacity-60' : ''}`}
                 onPress={handleWriteNFC}
                 disabled={nfcWriting}
                 activeOpacity={0.85}
-                style={{ shadowColor: '#06b6d4', shadowOpacity: 0.35, shadowRadius: 12, elevation: 5 }}
               >
                 {nfcWriting
-                  ? <ActivityIndicator color="#0f172a" />
-                  : <Text className="text-slate-900 font-bold text-lg">Start NFC Write</Text>
+                  ? <ActivityIndicator color="#ffffff" />
+                  : <Text className="text-white font-bold text-lg">Start NFC Write</Text>
                 }
               </TouchableOpacity>
             )}
@@ -170,25 +169,25 @@ export default function NFCBLESetupScreen() {
 
         {/* Step 2: BLE Config */}
         {currentStep === 'ble' && (
-          <View className="bg-darkCard border border-darkBorder rounded-3xl p-6">
+          <View className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
             <View className="items-center mb-6">
-              <View className="w-20 h-20 bg-cyan-500/15 border border-cyan-500/30 rounded-full items-center justify-center mb-4">
+              <View className="w-20 h-20 bg-blue-100 border border-blue-200 rounded-full items-center justify-center mb-4">
                 <Text className="text-4xl">📡</Text>
               </View>
-              <Text className="text-white text-xl font-bold mb-2">Step 2: Configure BLE Beacon</Text>
-              <Text className="text-slate-400 text-sm text-center leading-6">
+              <Text className="text-slate-900 text-xl font-bold mb-2">Step 2: Configure BLE Beacon</Text>
+              <Text className="text-slate-500 text-sm text-center leading-6 font-medium">
                 Open your BLE beacon's companion app and set its broadcast name exactly as shown below:
               </Text>
             </View>
 
             {/* Beacon ID */}
-            <View className="bg-slate-800 border border-primary/40 rounded-2xl py-5 px-6 items-center mb-6">
-              <Text className="text-slate-500 text-xs mb-2 uppercase tracking-wider">Beacon Broadcast Name</Text>
+            <View className="bg-slate-50 border border-slate-200 rounded-2xl py-5 px-6 items-center mb-6 shadow-inner">
+              <Text className="text-slate-500 text-xs mb-2 uppercase tracking-wider font-bold">Beacon Broadcast Name</Text>
               <Text className="text-primary font-mono text-2xl font-bold tracking-widest">{beaconId}</Text>
             </View>
 
             {/* Instructions */}
-            <View className="bg-slate-800/50 rounded-2xl p-4 mb-6">
+            <View className="bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-100">
               {[
                 'Open your beacon\'s companion app (e.g. nRF Toolbox, EddyStone config)',
                 'Navigate to "Broadcast Name" or "Device Name" settings',
@@ -196,21 +195,20 @@ export default function NFCBLESetupScreen() {
                 'Save and restart the beacon',
               ].map((step, i) => (
                 <View key={i} className="flex-row items-start py-2">
-                  <View className="w-5 h-5 bg-primary/20 border border-primary/30 rounded-full items-center justify-center mr-3 mt-0.5">
+                  <View className="w-5 h-5 bg-primary/10 border border-primary/20 rounded-full items-center justify-center mr-3 mt-0.5">
                     <Text className="text-primary text-xs font-bold">{i + 1}</Text>
                   </View>
-                  <Text className="text-slate-400 text-sm leading-5 flex-1">{step}</Text>
+                  <Text className="text-slate-600 text-sm leading-5 flex-1 font-medium">{step}</Text>
                 </View>
               ))}
             </View>
 
             <TouchableOpacity
-              className="w-full bg-primary py-4 rounded-2xl items-center"
+              className="w-full bg-primary py-4 rounded-2xl items-center shadow-md shadow-primary/30"
               onPress={handleFinishBLE}
               activeOpacity={0.85}
-              style={{ shadowColor: '#06b6d4', shadowOpacity: 0.35, shadowRadius: 12, elevation: 5 }}
             >
-              <Text className="text-slate-900 font-bold text-lg">I've Set It Up — Finish</Text>
+              <Text className="text-white font-bold text-lg">I've Set It Up — Finish</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -218,12 +216,11 @@ export default function NFCBLESetupScreen() {
         {/* Step 3: Done */}
         {currentStep === 'done' && (
           <View className="items-center py-8">
-            <View className="w-28 h-28 bg-green-500/15 border border-green-500/30 rounded-full items-center justify-center mb-6"
-              style={{ shadowColor: '#22c55e', shadowOpacity: 0.3, shadowRadius: 20, elevation: 5 }}>
+            <View className="w-28 h-28 bg-green-100 border border-green-200 rounded-full items-center justify-center mb-6 shadow-sm">
               <Text className="text-6xl">🎉</Text>
             </View>
-            <Text className="text-white text-3xl font-bold mb-3">All Done!</Text>
-            <Text className="text-slate-400 text-center text-base leading-6 px-6">
+            <Text className="text-slate-900 text-3xl font-black mb-3">All Done!</Text>
+            <Text className="text-slate-500 text-center text-base leading-6 px-6 font-medium">
               Your NFC + BLE combo tag is fully set up.{'\n'}Your item is now protected by both{'\n'}NFC scanning and passive BLE tracking.
             </Text>
           </View>
@@ -232,11 +229,11 @@ export default function NFCBLESetupScreen() {
         {/* Dev Skip */}
         {currentStep !== 'done' && (
           <TouchableOpacity
-            className="mt-6 bg-darkCard border border-darkBorder px-6 py-3 rounded-xl items-center"
+            className="mt-6 bg-white border border-slate-200 px-6 py-3 rounded-xl items-center shadow-sm"
             onPress={() => router.replace('/(tabs)/my-items')}
             activeOpacity={0.7}
           >
-            <Text className="text-slate-500 font-semibold text-sm">Skip (Dev Mode)</Text>
+            <Text className="text-slate-500 font-bold text-sm">Skip (Dev Mode)</Text>
           </TouchableOpacity>
         )}
       </ScrollView>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
@@ -10,6 +11,8 @@ import { useSubscriptionStore } from '../../stores/subscriptionStore';
 import TagTypeSelector from '../../components/TagTypeSelector';
 import EntitlementGate from '../../components/subscription/EntitlementGate';
 import { PLAN_LIMITS } from '../../lib/constants';
+import { generateFMDNKeyPair, registerFMDNKeys, generateFirmwareConfig } from '../../lib/fmdn';
+import { generateOpenHaystackKeyPair, registerOpenHaystackKeys } from '../../lib/openhaystack';
 
 type TagType = 'nfc_only' | 'nfc_ble' | 'ble_only';
 
@@ -99,9 +102,47 @@ export default function RegisterItemScreen() {
         ble_beacon_id,
         tag_type: tagType,
         status: 'active',
+        tracking_networks: tagType !== 'nfc_only' ? ['app_relay'] : [],
       }).select().single();
 
       if (error) throw error;
+
+      // ── Capture GPS location at registration time ──────────────────────────
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          await supabase.from('items').update({
+            last_seen_lat: loc.coords.latitude,
+            last_seen_lng: loc.coords.longitude,
+            last_seen_at: new Date().toISOString(),
+          }).eq('id', data.id);
+        }
+      } catch (locErr) {
+        console.warn('Could not capture registration GPS:', locErr);
+        // Non-fatal — item still created
+      }
+
+      // ── Generate multi-network keys for BLE items ──────────────────────
+      if (tagType !== 'nfc_only' && data?.id) {
+        try {
+          // Layer 1: Google Find My Device Network (FMDN)
+          const fmdnKeys = await generateFMDNKeyPair();
+          await registerFMDNKeys(data.id, fmdnKeys);
+
+          // Layer 2: Apple Find My (OpenHaystack)
+          if (tier === 'max') {
+            const ofhaKeys = await generateOpenHaystackKeyPair();
+            await registerOpenHaystackKeys(data.id, ofhaKeys);
+          }
+
+          // Generate firmware config blob for the beacon
+          await generateFirmwareConfig(data.id, 'esp32_c3');
+        } catch (keyErr) {
+          console.warn('Multi-network key generation warning:', keyErr);
+          // Non-fatal — item is still created, keys can be regenerated later
+        }
+      }
 
       if (tagType === 'nfc_ble') {
         router.push({ pathname: '/nfc-ble-setup', params: { id: data.id, nfc_uid: nfc_uid || '', ble_beacon_id: ble_beacon_id || '' } });
@@ -127,20 +168,20 @@ export default function RegisterItemScreen() {
     const rTier = showUpgrade ? upgradeReason.tier : 'pro';
     const rFeat = showUpgrade ? upgradeReason.feature : 'Add more items';
     return (
-      <View className="flex-1 justify-center p-6 bg-darkBg">
+      <View className="flex-1 justify-center p-6 bg-slate-50">
         <EntitlementGate requiredTier={rTier as any} featureName={rFeat}>
-          <Text className="text-white">Hidden</Text>
+          <Text className="text-slate-900">Hidden</Text>
         </EntitlementGate>
         <TouchableOpacity className="mt-4" onPress={() => showUpgrade ? setShowUpgrade(false) : router.back()}>
-          <Text className="text-center text-slate-400 font-bold p-4 text-lg">← Go back</Text>
+          <Text className="text-center text-slate-500 font-bold p-4 text-lg">← Go back</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-darkBg">
-      <StatusBar barStyle="light-content" />
+    <View className="flex-1 bg-slate-50">
+      <StatusBar barStyle="dark-content" />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 80, paddingTop: 60 }}>
         {/* Back */}
         <TouchableOpacity onPress={() => router.back()} className="mb-6 flex-row items-center" activeOpacity={0.7}>
@@ -148,13 +189,13 @@ export default function RegisterItemScreen() {
           <Text className="text-primary font-semibold">My Items</Text>
         </TouchableOpacity>
 
-        <Text className="text-slate-400 text-xs uppercase tracking-widest mb-2">New Item</Text>
-        <Text className="text-white text-3xl font-bold mb-8">Register Item</Text>
+        <Text className="text-slate-500 text-xs uppercase tracking-widest mb-2 font-bold">New Item</Text>
+        <Text className="text-slate-900 text-3xl font-black mb-8">Register Item</Text>
 
         {/* Image Picker */}
         <TouchableOpacity
           onPress={pickImage}
-          className="w-full h-44 bg-darkCard border-2 border-dashed border-darkBorder rounded-3xl mb-6 items-center justify-center overflow-hidden"
+          className="w-full h-44 bg-white border-2 border-dashed border-slate-300 rounded-3xl mb-6 items-center justify-center overflow-hidden shadow-sm"
           activeOpacity={0.8}
         >
           {imageUri ? (
@@ -162,20 +203,20 @@ export default function RegisterItemScreen() {
           ) : (
             <View className="items-center">
               <Text className="text-4xl mb-2">📷</Text>
-              <Text className="text-slate-400 font-medium">Tap to add photo</Text>
-              <Text className="text-slate-600 text-xs mt-1">Optional but recommended</Text>
+              <Text className="text-slate-600 font-bold">Tap to add photo</Text>
+              <Text className="text-slate-400 text-xs mt-1 font-medium">Optional but recommended</Text>
             </View>
           )}
         </TouchableOpacity>
 
         {/* Item Name */}
         <View className="mb-5">
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Item Name *</Text>
-          <View className="bg-darkCard border border-darkBorder rounded-2xl px-4 flex-row items-center">
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-2 font-bold">Item Name *</Text>
+          <View className="bg-white border border-slate-200 rounded-2xl px-4 flex-row items-center shadow-sm">
             <TextInput
-              className="flex-1 text-white py-4 text-base"
+              className="flex-1 text-slate-900 py-4 text-base font-medium"
               placeholder="e.g. Black Leather Wallet"
-              placeholderTextColor="#475569"
+              placeholderTextColor="#94a3b8"
               value={name}
               onChangeText={setName}
             />
@@ -184,21 +225,21 @@ export default function RegisterItemScreen() {
 
         {/* Category */}
         <View className="mb-5">
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-3 font-semibold">Category</Text>
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-3 font-bold">Category</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View className="flex-row gap-2">
               {CATEGORIES.map(cat => (
                 <TouchableOpacity
                   key={cat}
                   onPress={() => setCategory(cat)}
-                  className={`px-4 py-2 rounded-full border ${
+                  className={`px-4 py-2 rounded-full border shadow-sm ${
                     category === cat
-                      ? 'bg-primary/20 border-primary/50'
-                      : 'bg-darkCard border-darkBorder'
+                      ? 'bg-primary/10 border-primary/20 shadow-primary/10'
+                      : 'bg-white border-slate-200'
                   }`}
                   activeOpacity={0.7}
                 >
-                  <Text className={`font-semibold text-sm ${category === cat ? 'text-primary' : 'text-slate-400'}`}>
+                  <Text className={`font-bold text-sm ${category === cat ? 'text-primary' : 'text-slate-500'}`}>
                     {cat}
                   </Text>
                 </TouchableOpacity>
@@ -209,12 +250,12 @@ export default function RegisterItemScreen() {
 
         {/* Color */}
         <View className="mb-5">
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Color</Text>
-          <View className="bg-darkCard border border-darkBorder rounded-2xl px-4">
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-2 font-bold">Color</Text>
+          <View className="bg-white border border-slate-200 rounded-2xl px-4 shadow-sm">
             <TextInput
-              className="text-white py-4 text-base"
+              className="text-slate-900 py-4 text-base font-medium"
               placeholder="e.g. Black, Blue, Silver..."
-              placeholderTextColor="#475569"
+              placeholderTextColor="#94a3b8"
               value={color}
               onChangeText={setColor}
             />
@@ -223,12 +264,12 @@ export default function RegisterItemScreen() {
 
         {/* Description */}
         <View className="mb-6">
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Description</Text>
-          <View className="bg-darkCard border border-darkBorder rounded-2xl px-4">
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-2 font-bold">Description</Text>
+          <View className="bg-white border border-slate-200 rounded-2xl px-4 shadow-sm">
             <TextInput
-              className="text-white py-4 text-base"
+              className="text-slate-900 py-4 text-base font-medium"
               placeholder="Distinguishing features, damage, marks..."
-              placeholderTextColor="#475569"
+              placeholderTextColor="#94a3b8"
               value={description}
               onChangeText={setDescription}
               multiline
@@ -248,15 +289,14 @@ export default function RegisterItemScreen() {
 
         {/* Submit */}
         <TouchableOpacity
-          className={`w-full bg-primary py-4 rounded-2xl items-center mt-6 ${loading ? 'opacity-60' : ''}`}
+          className={`w-full bg-primary py-4 rounded-2xl items-center mt-6 shadow-md shadow-primary/30 ${loading ? 'opacity-60' : ''}`}
           onPress={handleRegister}
           disabled={loading}
           activeOpacity={0.85}
-          style={{ shadowColor: '#06b6d4', shadowOpacity: 0.35, shadowRadius: 12, elevation: 5 }}
         >
           {loading
-            ? <ActivityIndicator color="#0f172a" />
-            : <Text className="text-slate-900 font-bold text-lg tracking-wide">Continue to Setup Tag →</Text>
+            ? <ActivityIndicator color="#ffffff" />
+            : <Text className="text-white font-bold text-lg tracking-wide">Continue to Setup Tag →</Text>
           }
         </TouchableOpacity>
       </ScrollView>

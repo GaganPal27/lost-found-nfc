@@ -42,21 +42,21 @@ export default function NotificationDetailScreen() {
   const canSend = sharePhone || shareLiveLocation || message.trim().length > 0;
 
   if (loading) return (
-    <View className="flex-1 bg-darkBg justify-center items-center">
-      <ActivityIndicator size="large" color="#06b6d4" />
+    <View className="flex-1 bg-slate-50 justify-center items-center">
+      <ActivityIndicator size="large" color="#e11d48" />
     </View>
   );
   if (!notification) return (
-    <View className="flex-1 bg-darkBg justify-center items-center">
-      <Text className="text-slate-400">Notification not found</Text>
+    <View className="flex-1 bg-slate-50 justify-center items-center">
+      <Text className="text-slate-500 font-medium">Notification not found</Text>
     </View>
   );
 
   const { metadata } = notification;
 
   return (
-    <View className="flex-1 bg-darkBg">
-      <StatusBar barStyle="light-content" />
+    <View className="flex-1 bg-slate-50">
+      <StatusBar barStyle="dark-content" />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 80, paddingTop: 60 }}>
         {/* Back */}
         <TouchableOpacity onPress={() => router.back()} className="mb-6 flex-row items-center" activeOpacity={0.7}>
@@ -65,54 +65,54 @@ export default function NotificationDetailScreen() {
         </TouchableOpacity>
 
         {/* Alert Banner */}
-        <View className="bg-cyan-500/10 border border-cyan-500/30 rounded-3xl p-5 mb-6 flex-row items-center">
-          <View className="w-14 h-14 bg-cyan-500/20 rounded-2xl items-center justify-center mr-4">
+        <View className="bg-blue-50 border border-blue-200 rounded-3xl p-5 mb-6 flex-row items-center shadow-sm">
+          <View className="w-14 h-14 bg-blue-100 rounded-2xl items-center justify-center mr-4">
             <Text className="text-3xl">📱</Text>
           </View>
           <View className="flex-1">
-            <Text className="text-cyan-300 font-bold text-base mb-0.5">Item Found!</Text>
-            <Text className="text-slate-400 text-sm">Someone scanned your lost item</Text>
+            <Text className="text-blue-700 font-bold text-base mb-0.5">Item Found!</Text>
+            <Text className="text-slate-600 text-sm font-medium">Someone scanned your lost item</Text>
           </View>
         </View>
 
-        <Text className="text-white text-2xl font-bold mb-6">Coordinate Return</Text>
+        <Text className="text-slate-900 text-2xl font-black mb-6">Coordinate Return</Text>
 
         {/* Location */}
-        <View className="bg-darkCard border border-darkBorder rounded-3xl p-5 mb-5">
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-1 font-semibold">Scan Location</Text>
-          <Text className="text-white text-lg font-bold">
+        <View className="bg-white border border-slate-200 rounded-3xl p-5 mb-5 shadow-sm">
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-1 font-bold">Scan Location</Text>
+          <Text className="text-slate-900 text-lg font-bold">
             {metadata?.location_label || 'Unknown Area'}
           </Text>
           {metadata?.scanned_at && (
-            <Text className="text-slate-500 text-sm mt-1">
+            <Text className="text-slate-500 text-sm mt-1 font-medium">
               Scanned: {new Date(metadata.scanned_at).toLocaleString()}
             </Text>
           )}
         </View>
 
         {/* Share Options */}
-        <View className="bg-darkCard border border-darkBorder rounded-3xl overflow-hidden mb-5">
+        <View className="bg-white border border-slate-200 rounded-3xl overflow-hidden mb-5 shadow-sm">
           <View className="px-5 pt-4 pb-2">
-            <Text className="text-slate-400 text-xs uppercase tracking-wider font-semibold">Share with Finder</Text>
+            <Text className="text-slate-500 text-xs uppercase tracking-wider font-bold">Share with Finder</Text>
           </View>
 
           <TouchableOpacity
-            className="flex-row justify-between items-center px-5 py-4 border-b border-slate-700"
+            className="flex-row justify-between items-center px-5 py-4 border-b border-slate-100"
             activeOpacity={0.7}
             onPress={() => setSharePhone(!sharePhone)}
           >
             <View className="flex-row items-center">
               <Text className="text-xl mr-3">📞</Text>
               <View>
-                <Text className="text-white font-semibold">Phone Number</Text>
-                <Text className="text-slate-500 text-xs">Finder can call you to arrange pickup</Text>
+                <Text className="text-slate-900 font-bold">Phone Number</Text>
+                <Text className="text-slate-500 text-xs font-medium">Finder can call you to arrange pickup</Text>
               </View>
             </View>
             <Switch
               value={sharePhone}
               onValueChange={setSharePhone}
-              trackColor={{ true: '#06b6d4', false: '#334155' }}
-              thumbColor={sharePhone ? '#22d3ee' : '#94a3b8'}
+              trackColor={{ true: '#e11d48', false: '#e2e8f0' }}
+              thumbColor={sharePhone ? '#ffffff' : '#f1f5f9'}
             />
           </TouchableOpacity>
 
@@ -124,49 +124,48 @@ export default function NotificationDetailScreen() {
             <View className="flex-row items-center">
               <Text className="text-xl mr-3">📍</Text>
               <View>
-                <Text className="text-white font-semibold">Live Location</Text>
-                <Text className="text-slate-500 text-xs">Share your current location for meetup</Text>
+                <Text className="text-slate-900 font-bold">Live Location</Text>
+                <Text className="text-slate-500 text-xs font-medium">Share your current location for meetup</Text>
               </View>
             </View>
             <Switch
               value={shareLiveLocation}
               onValueChange={setShareLiveLocation}
-              trackColor={{ true: '#06b6d4', false: '#334155' }}
-              thumbColor={shareLiveLocation ? '#22d3ee' : '#94a3b8'}
+              trackColor={{ true: '#e11d48', false: '#e2e8f0' }}
+              thumbColor={shareLiveLocation ? '#ffffff' : '#f1f5f9'}
             />
           </TouchableOpacity>
         </View>
 
         {/* Message */}
         <View className="mb-6">
-          <Text className="text-slate-400 text-xs uppercase tracking-wider mb-3 font-semibold">Message to Finder</Text>
-          <View className="bg-darkCard border border-darkBorder rounded-2xl px-4 py-3">
+          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-3 font-bold">Message to Finder</Text>
+          <View className="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-sm">
             <TextInput
-              className="text-white text-base"
+              className="text-slate-900 text-base font-medium"
               multiline
               textAlignVertical="top"
               placeholder="e.g. Please leave it at the front desk of the library..."
-              placeholderTextColor="#475569"
+              placeholderTextColor="#94a3b8"
               value={message}
               onChangeText={setMessage}
               style={{ minHeight: 100 }}
             />
           </View>
-          <Text className="text-slate-600 text-xs mt-2">
+          <Text className="text-slate-500 text-xs mt-2 font-medium">
             Select at least one option or write a message to send.
           </Text>
         </View>
 
         {/* Send Button */}
         <TouchableOpacity
-          className={`w-full bg-primary py-4 rounded-2xl items-center flex-row justify-center ${(!canSend || sending) ? 'opacity-40' : ''}`}
+          className={`w-full bg-primary py-4 rounded-2xl items-center flex-row justify-center shadow-md shadow-primary/30 ${(!canSend || sending) ? 'opacity-40' : ''}`}
           disabled={!canSend || sending}
           onPress={handleSendInfo}
           activeOpacity={0.85}
-          style={{ shadowColor: '#06b6d4', shadowOpacity: canSend ? 0.35 : 0, shadowRadius: 12, elevation: 5 }}
         >
-          {sending ? <ActivityIndicator color="#0f172a" /> : (
-            <Text className="text-slate-900 font-bold text-lg">Send to Finder →</Text>
+          {sending ? <ActivityIndicator color="#ffffff" /> : (
+            <Text className="text-white font-bold text-lg tracking-wide">Send to Finder →</Text>
           )}
         </TouchableOpacity>
       </ScrollView>

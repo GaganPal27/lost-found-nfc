@@ -5,14 +5,14 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: "#06b6d4",
-        secondary: "#0e7490",
-        accent: "#22d3ee",
-        darkBg: "#0f172a",
-        darkCard: "#1e293b",
-        darkBorder: "#334155",
-        darkText: "#f1f5f9",
-        darkMuted: "#94a3b8",
+        primary: "#6366f1", // Modern Vibrant Indigo
+        secondary: "#8b5cf6", // Modern Vibrant Purple
+        accent: "#ec4899", // Pink
+        darkBg: "#f8f9ff", // Very light airy background
+        darkCard: "#ffffff",
+        darkBorder: "#f1f5f9",
+        darkText: "#0f172a",
+        darkMuted: "#64748b",
       }
     },
   },

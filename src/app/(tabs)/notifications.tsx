@@ -56,28 +56,28 @@ export default function NotificationsScreen() {
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
-    <View className="flex-1 bg-darkBg">
-      <StatusBar barStyle="light-content" />
+    <View className="flex-1 bg-slate-50">
+      <StatusBar barStyle="dark-content" />
       {/* Header */}
-      <View className="px-6 pt-14 pb-5 border-b border-darkBorder">
+      <View className="px-6 pt-14 pb-5 border-b border-slate-200">
         <View className="flex-row justify-between items-center">
           <View>
-            <Text className="text-slate-400 text-xs uppercase tracking-widest mb-1">Alerts</Text>
+            <Text className="text-slate-500 text-xs uppercase tracking-widest mb-1 font-bold">Alerts</Text>
             <View className="flex-row items-center">
-              <Text className="text-white text-3xl font-bold mr-3">Activity</Text>
+              <Text className="text-slate-900 text-3xl font-black mr-3">Activity</Text>
               {unreadCount > 0 && (
-                <View className="bg-primary w-6 h-6 rounded-full items-center justify-center">
-                  <Text className="text-slate-900 text-xs font-bold">{unreadCount}</Text>
+                <View className="bg-primary w-6 h-6 rounded-full items-center justify-center shadow-sm">
+                  <Text className="text-white text-xs font-bold">{unreadCount}</Text>
                 </View>
               )}
             </View>
           </View>
           <TouchableOpacity
             onPress={() => router.push('/profile')}
-            className="w-11 h-11 bg-darkCard border border-darkBorder rounded-full items-center justify-center"
+            className="w-11 h-11 bg-white border border-slate-200 shadow-sm rounded-full items-center justify-center"
             activeOpacity={0.7}
           >
-            <Text className="text-white font-bold">{user?.email?.[0]?.toUpperCase() || 'U'}</Text>
+            <Text className="text-slate-700 font-bold">{user?.email?.[0]?.toUpperCase() || 'U'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -90,18 +90,18 @@ export default function NotificationsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#06b6d4"
-              colors={['#06b6d4']}
+              tintColor="#e11d48"
+              colors={['#e11d48']}
             />
           }
           contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
           ListEmptyComponent={
             <View className="items-center justify-center py-28">
-              <View className="w-24 h-24 bg-darkCard border border-darkBorder rounded-full items-center justify-center mb-6">
+              <View className="w-24 h-24 bg-white border border-slate-200 shadow-sm rounded-full items-center justify-center mb-6">
                 <Text className="text-4xl">📭</Text>
               </View>
-              <Text className="text-white text-xl font-bold mb-2">All quiet</Text>
-              <Text className="text-slate-400 text-center px-10 leading-6">
+              <Text className="text-slate-900 text-xl font-bold mb-2">All quiet</Text>
+              <Text className="text-slate-500 text-center px-10 leading-6 font-medium">
                 When someone scans your lost item{'\n'}or it's detected nearby, it'll appear here.
               </Text>
             </View>
@@ -110,10 +110,10 @@ export default function NotificationsScreen() {
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => handlePress(item)}
-              className={`rounded-3xl mb-4 border overflow-hidden ${
+              className={`rounded-3xl mb-4 border overflow-hidden shadow-sm ${
                 item.is_read
-                  ? 'bg-darkCard border-darkBorder'
-                  : 'bg-cyan-950/60 border-cyan-700/50'
+                  ? 'bg-white border-slate-200'
+                  : 'bg-red-50 border-red-200'
               }`}
             >
               {/* Unread accent bar */}
@@ -122,12 +122,12 @@ export default function NotificationsScreen() {
               <View className="p-5">
                 <View className="flex-row items-start mb-3">
                   <View className={`w-12 h-12 rounded-2xl items-center justify-center mr-4 ${
-                    item.type === 'nfc_tap' ? 'bg-primary/20 border border-primary/30' : 'bg-slate-700/50 border border-slate-600'
+                    item.type === 'nfc_tap' ? 'bg-primary/10 border border-primary/20' : 'bg-slate-100 border border-slate-200'
                   }`}>
                     <Text className="text-2xl">{item.type === 'nfc_tap' ? '📱' : '📡'}</Text>
                   </View>
                   <View className="flex-1">
-                    <Text className={`font-bold text-base mb-0.5 ${item.is_read ? 'text-slate-300' : 'text-white'}`}>
+                    <Text className={`font-bold text-base mb-0.5 ${item.is_read ? 'text-slate-700' : 'text-slate-900'}`}>
                       {item.type === 'nfc_tap' ? 'Item Scanned by Finder' : 'Passive Network Sighting'}
                     </Text>
                     <Text className="text-xs text-slate-500 font-medium">
@@ -139,7 +139,7 @@ export default function NotificationsScreen() {
                   )}
                 </View>
 
-                <Text className={`leading-6 text-sm ${item.is_read ? 'text-slate-400' : 'text-slate-300'}`}>
+                <Text className={`leading-6 text-sm ${item.is_read ? 'text-slate-500' : 'text-slate-700 font-medium'}`}>
                   {item.message}
                 </Text>
 
