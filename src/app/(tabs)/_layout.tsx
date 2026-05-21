@@ -2,16 +2,19 @@ import { Tabs } from 'expo-router';
 import { View, Text, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+// ADDED: The 5th Community Tab is now between Connect and Alerts
 const TABS = [
-  { name: 'my-items',      icon: '🛡️',  label: 'Items'  },
-  { name: 'scan',          icon: '⬡',    label: 'Scan'   },
-  { name: 'connect',       icon: '🤝',   label: 'Connect' },
-  { name: 'notifications', icon: '🔔',   label: 'Alerts' },
+  { name: 'my-items',      icon: '🛡️',  label: 'Items'   },
+  { name: 'scan',          icon: '⬡',   label: 'Scan'    },
+  { name: 'connect',       icon: '🤝',  label: 'Connect' },
+  { name: 'community',     icon: '🗺️',  label: 'Board'   }, 
+  { name: 'notifications', icon: '🔔',  label: 'Alerts'  },
 ];
 
 function TabIcon({ focused, icon, label }: { focused: boolean; icon: string; label: string }) {
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 4, minWidth: 60 }}>
+    // CHANGED: Reduced minWidth from 60 to 52 to fit 5 tabs
+    <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 4, minWidth: 52 }}>
       {focused && (
         <View style={{
           position: 'absolute', top: -12, width: 32, height: 32,
@@ -21,7 +24,8 @@ function TabIcon({ focused, icon, label }: { focused: boolean; icon: string; lab
       )}
       <Text style={{ fontSize: 21, marginBottom: 3, opacity: focused ? 1 : 0.4 }}>{icon}</Text>
       <Text style={{
-        fontSize: 9, fontWeight: focused ? '800' : '600',
+        // CHANGED: Reduced fontSize from 9 to 8 to prevent overlap
+        fontSize: 8, fontWeight: focused ? '800' : '600',
         color: focused ? '#6366f1' : '#64748b',
         letterSpacing: 0.8, textTransform: 'uppercase',
       }}>{label}</Text>
