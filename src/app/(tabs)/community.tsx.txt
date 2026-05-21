@@ -1,0 +1,11 @@
+import { View, Text } from 'react-native';
+import React from 'react';
+
+export default function CommunityBoardScreen() {
+  return (
+    <View className="flex-1 items-center justify-center bg-[#f8f9ff]">
+      <Text className="text-2xl font-bold text-[#6366f1]">Community Board</Text>
+      <Text className="text-gray-500 mt-2">Coming soon...</Text>
+    </View>
+  );
+}
