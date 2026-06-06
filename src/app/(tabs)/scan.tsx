@@ -80,6 +80,7 @@ export default function ScanScreen() {
   // ── BLE ───────────────────────────────────────────────────────────────────
   const handleBLEScan = useCallback(async () => {
     setScanning(true);
+    startPulse();
     setBleResults([]);
     const found: BLEResult[] = [];
 
@@ -125,6 +126,7 @@ export default function ScanScreen() {
       else await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       setScanning(false);
+      stopPulse();
     }
   }, []);
 
@@ -181,7 +183,7 @@ export default function ScanScreen() {
 
       {/* ── NFC Mode ─────────────────────────────────────────────────────── */}
       {mode === 'nfc' && (
-        <View className="flex-1 items-center justify-center px-6">
+        <View className="flex-1 items-center justify-center px-6 pb-[140px]">
           <View style={{ width: 260, height: 260, alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
             {[{ a: ring3, s: 1.15, w: 220 }, { a: ring2, s: 1.12, w: 170 }, { a: ring1, s: 1.1, w: 120 }].map(({ a, s, w }, i) => (
               <Animated.View key={i} style={{ position: 'absolute', width: w, height: w, borderRadius: w / 2, borderWidth: 1.5, borderColor: '#e11d48', opacity: ringOp(a), transform: [{ scale: ringScale(a, s) }] }} />
@@ -205,30 +207,9 @@ export default function ScanScreen() {
 
       {/* ── BLE Mode ─────────────────────────────────────────────────────── */}
       {mode === 'ble' && (
-        <ScrollView className="flex-1" contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
-          {!scanning && bleResults.length === 0 && (
-            <View className="items-center py-10">
-              <View className="w-28 h-28 bg-white rounded-full items-center justify-center border-2 border-slate-200 mb-6 shadow-sm">
-                <Text className="text-5xl">📡</Text>
-              </View>
-              <Text className="text-slate-900 text-xl font-bold text-center mb-2">Scan for BLE Beacons</Text>
-              <Text className="text-slate-500 text-sm text-center mb-8 leading-5 px-4 font-medium">Detects nearby Lost & Found beacons{'\n'}and updates their location automatically.</Text>
-              <TouchableOpacity className="w-full bg-primary py-4 rounded-2xl items-center shadow-md" style={{ shadowColor: '#e11d48' }} onPress={handleBLEScan} activeOpacity={0.85}>
-                <Text className="text-white font-bold text-lg">Start BLE Scan →</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {scanning && (
-            <View className="items-center py-10">
-              <ActivityIndicator size="large" color="#e11d48" style={{ marginBottom: 16 }} />
-              <Text className="text-slate-900 font-bold text-lg">Scanning for beacons...</Text>
-              <Text className="text-slate-500 text-sm mt-2 font-medium">Scanning for 8 seconds</Text>
-              {bleResults.length > 0 && <Text className="text-primary text-sm mt-3 font-semibold">Found {bleResults.length} beacon{bleResults.length > 1 ? 's' : ''} so far…</Text>}
-            </View>
-          )}
-
-          {bleResults.length > 0 && (
+        bleResults.length > 0 ? (
+          // Results view — scrollable
+          <ScrollView className="flex-1" contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 140 }}>
             <View className="mt-2">
               <Text className="text-slate-500 text-xs uppercase tracking-wider mb-3 font-bold">{bleResults.length} Beacon{bleResults.length > 1 ? 's' : ''} Detected</Text>
               {bleResults.map((d, i) => {
@@ -271,13 +252,41 @@ export default function ScanScreen() {
                 <Text className="text-slate-600 font-bold">Scan Again</Text>
               </TouchableOpacity>
             </View>
-          )}
-        </ScrollView>
+          </ScrollView>
+        ) : (
+          // Idle or scanning — same layout as NFC
+          <View className="flex-1 items-center justify-center px-6 pb-[140px]">
+            <View style={{ width: 260, height: 260, alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
+              {[{ a: ring3, s: 1.15, w: 220 }, { a: ring2, s: 1.12, w: 170 }, { a: ring1, s: 1.1, w: 120 }].map(({ a, s, w }, i) => (
+                <Animated.View key={i} style={{ position: 'absolute', width: w, height: w, borderRadius: w / 2, borderWidth: 1.5, borderColor: '#6366f1', opacity: ringOp(a), transform: [{ scale: ringScale(a, s) }] }} />
+              ))}
+              <View className="w-28 h-28 bg-white rounded-full items-center justify-center border-2 border-slate-200" style={{ shadowColor: '#6366f1', shadowOpacity: scanning ? 0.3 : 0.05, shadowRadius: 20, elevation: 6 }}>
+                <Text className="text-5xl">📡</Text>
+              </View>
+            </View>
+            <Text className="text-slate-900 text-xl font-bold text-center mb-2">
+              {scanning ? 'Scanning for beacons...' : 'Scan for BLE Beacons'}
+            </Text>
+            <Text className="text-slate-500 text-sm text-center mb-8 leading-5 font-medium">
+              {scanning
+                ? `Finding nearby Lost & Found beacons${bleResults.length > 0 ? ` · ${bleResults.length} found` : ''}`
+                : 'Detects nearby Lost & Found beacons\nand updates their location automatically.'}
+            </Text>
+            {!scanning
+              ? <TouchableOpacity className="w-full bg-primary py-4 rounded-2xl items-center" style={{ shadowColor: '#6366f1', shadowOpacity: 0.4, shadowRadius: 16, elevation: 6 }} onPress={handleBLEScan} activeOpacity={0.85}><Text className="text-white font-bold text-lg">Start BLE Scan →</Text></TouchableOpacity>
+              : <TouchableOpacity className="border border-slate-300 py-3 px-10 rounded-2xl bg-white" onPress={() => { setScanning(false); stopPulse(); }} activeOpacity={0.7}><Text className="text-slate-500 font-semibold">Cancel</Text></TouchableOpacity>
+            }
+            <View className="flex-row mt-6 gap-3">
+              <View className="bg-white border border-slate-200 px-4 py-2 rounded-full flex-row items-center shadow-sm"><View className="w-2 h-2 rounded-full bg-blue-500 mr-2" /><Text className="text-slate-600 text-xs font-bold">BLE Active</Text></View>
+              <View className="bg-white border border-slate-200 px-4 py-2 rounded-full shadow-sm"><Text className="text-slate-600 text-xs font-bold">8s Scan ⏱</Text></View>
+            </View>
+          </View>
+        )
       )}
 
       {/* ── QR Mode ──────────────────────────────────────────────────────── */}
       {mode === 'qr' && (
-        <View className="flex-1">
+        <View className="flex-1 pb-[140px]">
           {!cameraPermission?.granted ? (
             <View className="flex-1 items-center justify-center px-6">
               <Text className="text-5xl mb-6">📸</Text>
@@ -309,7 +318,7 @@ export default function ScanScreen() {
                 </View>
               </CameraView>
               {qrScanned && (
-                <View className="absolute bottom-10 left-6 right-6">
+                <View className="absolute bottom-6 left-6 right-6">
                   <TouchableOpacity className="bg-white border border-slate-200 py-4 rounded-2xl items-center shadow-md" onPress={() => setQrScanned(false)} activeOpacity={0.7}>
                     <Text className="text-slate-700 font-bold">Tap to Scan Again</Text>
                   </TouchableOpacity>

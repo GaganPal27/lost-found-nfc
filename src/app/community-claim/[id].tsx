@@ -18,6 +18,7 @@ type CommunityItem = {
   image_url: string | null;
   proof_question: string;
   status: string;
+  finder_id: string;
 };
 
 export default function CommunityClaimScreen() {
@@ -41,7 +42,7 @@ export default function CommunityClaimScreen() {
     // Load item (NOT exposing proof_question to FlatList — only revealed here)
     supabase
       .from('community_items')
-      .select('id, title, description, category, location_label, image_url, proof_question, status')
+      .select('id, title, description, category, location_label, image_url, proof_question, status, finder_id')
       .eq('id', id)
       .single()
       .then(({ data, error }) => {
@@ -55,7 +56,7 @@ export default function CommunityClaimScreen() {
   }, [id, user]);
 
   const handleSubmit = async () => {
-    if (!answer.trim()) {
+    if (item?.proof_question && !answer.trim()) {
       Alert.alert('Required', 'Please answer the proof question to submit your claim.');
       return;
     }
@@ -68,7 +69,7 @@ export default function CommunityClaimScreen() {
       const { error } = await supabase.from('community_claims').insert({
         community_item_id: id,
         claimant_id:       dbUserId,
-        proof_answer:      answer.trim(),
+        proof_answer:      answer.trim() || '[No proof question provided]',
         status:            'pending',
       });
 
@@ -85,7 +86,7 @@ export default function CommunityClaimScreen() {
       // Notify finder via notifications table
       if (item) {
         await supabase.from('notifications').insert({
-          user_id:  item.id, // This gets resolved in the next step — see note below
+          user_id:  item.finder_id,
           type:     'message',
           message:  `Someone claims to own "${item.title}" — review their proof answer.`,
           metadata: { community_item_id: id, claimant_id: dbUserId },
@@ -162,27 +163,35 @@ export default function CommunityClaimScreen() {
         </View>
 
         {/* Proof question + answer */}
-        <View style={styles.proofCard}>
-          <Text style={styles.label}>Proof Question</Text>
-          <View style={styles.questionBox}>
-            <Text style={styles.questionText}>"{item.proof_question}"</Text>
-          </View>
+        {item.proof_question ? (
+          <View style={styles.proofCard}>
+            <Text style={styles.label}>Proof Question</Text>
+            <View style={styles.questionBox}>
+              <Text style={styles.questionText}>"{item.proof_question}"</Text>
+            </View>
 
-          <Text style={[styles.label, { marginTop: 16 }]}>Your Answer *</Text>
-          <View style={styles.inputBox}>
-            <TextInput
-              style={styles.input}
-              placeholder="Type your answer here…"
-              placeholderTextColor="#94a3b8"
-              value={answer}
-              onChangeText={setAnswer}
-              autoCapitalize="sentences"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
+            <Text style={[styles.label, { marginTop: 16 }]}>Your Answer *</Text>
+            <View style={styles.inputBox}>
+              <TextInput
+                style={styles.input}
+                placeholder="Type your answer here…"
+                placeholderTextColor="#94a3b8"
+                value={answer}
+                onChangeText={setAnswer}
+                autoCapitalize="sentences"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
           </View>
-        </View>
+        ) : (
+          <View style={styles.proofCard}>
+            <Text style={styles.questionText} style={{ color: '#475569', fontStyle: 'normal', lineHeight: 22 }}>
+              The finder hasn't set a proof question. You can send a claim request to initiate a secure chat instead.
+            </Text>
+          </View>
+        )}
 
         {/* Privacy note */}
         <Text style={styles.privacyNote}>

@@ -38,7 +38,12 @@ export default function FinderConnectScreen() {
       Animated.timing(slideUp, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
     // Pre-fill if user is logged in
-    if (user?.email) setFinderName(user.email.split('@')[0]);
+    const { user, dbUser } = useAuthStore.getState();
+    if (dbUser?.full_name) {
+      setFinderName(dbUser.full_name);
+    } else if (user?.email) {
+      setFinderName(user.email.split('@')[0]);
+    }
   }, []);
 
   // ── Location capture ────────────────────────────────────────────────────────

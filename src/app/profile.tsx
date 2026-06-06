@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StatusBar, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StatusBar, Animated, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../stores/authStore';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
@@ -14,10 +14,14 @@ const PLAN_FEATURES = {
 };
 
 export default function ProfileScreen() {
-  const { user, setSession } = useAuthStore();
+  const { user, dbUser, setSession } = useAuthStore();
   const { tier } = useSubscriptionStore();
   const { itemsCount } = useItemStore();
   const router = useRouter();
+
+  const [editingName, setEditingName] = useState(false);
+  const [tempName, setTempName] = useState('');
+  const [savingName, setSavingName] = useState(false);
 
   const fadeIn = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -40,12 +44,29 @@ export default function ProfileScreen() {
   const maxItems = PLAN_LIMITS[tier].maxItems;
   const progressPct = maxItems === Infinity ? 0 : Math.min((itemsCount / maxItems) * 100, 100);
 
-  const initials = user?.email?.[0]?.toUpperCase() || 'U';
+  const displayName = dbUser?.full_name || user?.email?.split('@')[0] || 'User';
+  const initials = displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  const memberSince = dbUser?.created_at ? new Date(dbUser.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Recently';
+
+  const handleSaveName = async () => {
+    if (!tempName.trim()) return;
+    setSavingName(true);
+    const { error } = await supabase.from('users').update({ full_name: tempName.trim() }).eq('id', dbUser?.id);
+    setSavingName(false);
+    if (error) {
+      Alert.alert('Error', 'Could not update name.');
+    } else {
+      setEditingName(false);
+      // Force refresh of auth store session to update dbUser
+      const { data: { session } } = await supabase.auth.getSession();
+      useAuthStore.getState().setSession(session);
+    }
+  };
 
   return (
     <View className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 160 }}>
         {/* Header */}
         <View className="px-6 pt-14 pb-6 flex-row justify-between items-center">
           <Text className="text-slate-900 text-2xl font-black">Profile</Text>
@@ -56,14 +77,58 @@ export default function ProfileScreen() {
 
         <Animated.View style={{ opacity: fadeIn }}>
           {/* Avatar Card */}
-          <View className="mx-6 bg-white border border-slate-200 rounded-3xl p-6 mb-5 items-center shadow-sm">
+          <View className="mx-6 bg-white border border-slate-200 rounded-3xl p-6 mb-5 items-center shadow-sm relative">
+            {(dbUser?.successful_recoveries || 0) > 0 && (
+              <View className="absolute top-4 right-4 bg-yellow-100 border border-yellow-300 px-3 py-1.5 rounded-full flex-row items-center">
+                <Text className="mr-1">🏆</Text>
+                <Text className="text-yellow-700 font-bold text-xs">TRUSTED</Text>
+              </View>
+            )}
+            
             <View className="w-24 h-24 bg-slate-100 rounded-full items-center justify-center mb-4 border-2 border-primary">
               <Text className="text-4xl text-primary font-black">{initials}</Text>
             </View>
-            <Text className="text-slate-900 font-bold text-lg mb-1">{user?.email}</Text>
+
+            {editingName ? (
+              <View className="w-full flex-row items-center border-b border-slate-300 pb-1 mb-2">
+                <TextInput
+                  value={tempName}
+                  onChangeText={setTempName}
+                  className="flex-1 text-center text-slate-900 font-bold text-lg"
+                  autoFocus
+                  placeholder="Your Name"
+                />
+                <TouchableOpacity onPress={handleSaveName} disabled={savingName} className="ml-2 bg-primary/10 px-3 py-1 rounded-full">
+                  {savingName ? <ActivityIndicator size="small" color="#6366f1" /> : <Text className="text-primary font-bold">Save</Text>}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View className="flex-row items-center justify-center mb-1 gap-2">
+                <Text className="text-slate-900 font-bold text-xl">{displayName}</Text>
+                <TouchableOpacity onPress={() => { setTempName(displayName); setEditingName(true); }}>
+                  <Text className="text-slate-400">✏️</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <Text className="text-slate-500 font-medium text-sm mb-1">{user?.email}</Text>
+            <Text className="text-slate-400 text-xs mb-2">Joined {memberSince}</Text>
+
             <View className={`flex-row items-center px-4 py-1.5 rounded-full border mt-2 ${tierConfig.bg} ${tierConfig.border}`}>
               <View className={`w-2 h-2 rounded-full mr-2 ${tierConfig.dot}`} />
               <Text className={`font-bold text-xs tracking-widest uppercase ${tierConfig.text}`}>{tierConfig.label} PLAN</Text>
+            </View>
+          </View>
+          
+          {/* Stats */}
+          <View className="mx-6 flex-row gap-4 mb-5">
+            <View className="flex-1 bg-white border border-slate-200 rounded-3xl p-4 items-center shadow-sm">
+              <Text className="text-3xl font-black text-slate-900 mb-1">{itemsCount}</Text>
+              <Text className="text-slate-500 text-xs uppercase font-bold text-center">Items{'\n'}Registered</Text>
+            </View>
+            <View className="flex-1 bg-white border border-slate-200 rounded-3xl p-4 items-center shadow-sm">
+              <Text className="text-3xl font-black text-slate-900 mb-1">{dbUser?.successful_recoveries || 0}</Text>
+              <Text className="text-slate-500 text-xs uppercase font-bold text-center">Successful{'\n'}Recoveries</Text>
             </View>
           </View>
 

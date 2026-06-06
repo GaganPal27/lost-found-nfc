@@ -182,7 +182,7 @@ export default function RegisterItemScreen() {
   return (
     <View className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 80, paddingTop: 60 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 160, paddingTop: 60 }}>
         {/* Back */}
         <TouchableOpacity onPress={() => router.back()} className="mb-6 flex-row items-center" activeOpacity={0.7}>
           <Text className="text-primary text-lg mr-1">←</Text>

@@ -19,7 +19,7 @@ type Message = {
 
 type Conversation = {
   id: string;
-  item_id: string;
+  item_id: string | null;
   owner_id: string;
   finder_name: string | null;
   finder_phone: string | null;
@@ -27,13 +27,15 @@ type Conversation = {
   scan_lat: number | null;
   scan_lng: number | null;
   resolved: boolean;
-  items?: { item_name: string };
+  community_item_id?: string | null;
+  items?: { item_name: string } | null;
+  community_items?: { title: string } | null;
 };
 
 export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user } = useAuthStore();
   const router = useRouter();
+  const { user, dbUser } = useAuthStore();
 
   const [conv, setConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -68,7 +70,7 @@ export default function ConversationScreen() {
   const loadConversation = async () => {
     const { data } = await supabase
       .from('conversations')
-      .select('*, items(item_name)')
+      .select('*, items(item_name), community_items:community_item_id(title)')
       .eq('id', id)
       .single();
     if (data) setConv(data as Conversation);
@@ -90,7 +92,7 @@ export default function ConversationScreen() {
   const sendMessage = async () => {
     if (!body.trim()) return;
     setSending(true);
-    const senderName = user?.email?.split('@')[0] ?? 'Owner';
+    const senderName = dbUser?.full_name ?? (user?.email?.split('@')[0] ?? 'Owner');
     await supabase.from('messages').insert({
       conversation_id: id,
       sender_id: user?.id ?? null,
@@ -120,7 +122,13 @@ export default function ConversationScreen() {
           text: 'Resolve', style: 'default',
           onPress: async () => {
             await supabase.from('conversations').update({ resolved: true }).eq('id', id);
-            await supabase.from('items').update({ status: 'found' }).eq('id', conv?.item_id);
+            
+            if (conv?.item_id) {
+              await supabase.from('items').update({ status: 'found' }).eq('id', conv.item_id);
+            } else if (conv?.community_item_id) {
+              await supabase.from('community_items').update({ status: 'closed' }).eq('id', conv.community_item_id);
+            }
+
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             router.replace('/(tabs)/connect');
           },
@@ -130,7 +138,7 @@ export default function ConversationScreen() {
   };
 
   const isOwner = user?.id === conv?.owner_id;
-  const itemName = (conv as any)?.items?.item_name ?? 'Item';
+  const itemName = conv?.community_items?.title ?? conv?.items?.item_name ?? 'Item';
 
   const formatTime = (ts: string) => {
     const d = new Date(ts);

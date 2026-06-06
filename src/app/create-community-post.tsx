@@ -42,12 +42,15 @@ export default function CreateCommunityPostScreen() {
 
   useEffect(() => {
     if (!user?.id) return;
+    // Look up the custom users.id by matching auth_id = auth.uid()
     supabase
       .from('users')
       .select('id')
       .eq('auth_id', user.id)
       .single()
-      .then(({ data }) => { if (data) setDbUserId(data.id); });
+      .then(({ data }) => {
+        if (data?.id) setDbUserId(data.id);
+      });
   }, [user]);
 
   // ── Image picker (camera + gallery) ─────────────────────────────────────────
@@ -153,7 +156,7 @@ export default function CreateCommunityPostScreen() {
         }
       } catch (_) {}
 
-      const { error } = await supabase.from('community_items').insert({
+      const { data: insertedData, error } = await supabase.from('community_items').insert({
         finder_id:          dbUserId,
         title:              title.trim(),
         description:        description.trim() || null,
@@ -164,9 +167,14 @@ export default function CreateCommunityPostScreen() {
         image_url:          imageUrl,
         status:             'open',
         proof_question:     proofQuestion.trim(),
-      });
+      }).select().single();
 
       if (error) throw error;
+
+      // Trigger Smart Match edge function in the background
+      supabase.functions.invoke('smart-match', {
+        body: { record: insertedData },
+      }).catch(err => console.warn('Smart Match failed to run:', err));
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
@@ -340,7 +348,7 @@ export default function CreateCommunityPostScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9ff' },
-  scroll:    { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
+  scroll:    { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 160 },
 
   back:       { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
   backArrow:  { color: '#6366f1', fontSize: 20, marginRight: 6 },

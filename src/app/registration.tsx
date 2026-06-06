@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, Animated, StatusBar, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
+import * as Location from 'expo-location';
+import { updateUserLocation } from '../lib/location';
 
 export default function RegistrationScreen() {
   const [name, setName] = useState('');
@@ -70,13 +72,26 @@ export default function RegistrationScreen() {
 
     if (error) {
       Alert.alert('Registration Failed', error.message);
-    } else if (data.user && !data.session) {
-      // Email confirmation required (Supabase setting)
-      Alert.alert(
-        '📧 Confirm your email',
-        `We sent a confirmation link to ${email}. Click it to activate your account, then sign in.`,
-        [{ text: 'OK', onPress: () => router.replace('/login') }]
-      );
+    } else if (data.user) {
+      // Ask for location permission for Community features
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted' && data.session) {
+          // If auto-login is on, we can save immediately
+          await updateUserLocation(data.user.id);
+        }
+      } catch (err) {
+        console.log('Location ask failed', err);
+      }
+
+      if (!data.session) {
+        // Email confirmation required
+        Alert.alert(
+          '📧 Confirm your email',
+          `We sent a confirmation link to ${email}. Click it to activate your account, then sign in.`,
+          [{ text: 'OK', onPress: () => router.replace('/login') }]
+        );
+      }
     }
     // If session is returned immediately (email confirm OFF in Supabase), auth listener handles redirect
     setLoading(false);

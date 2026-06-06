@@ -116,7 +116,7 @@ export default function SubscriptionScreen() {
       </ScrollView>
 
       {/* Bottom CTA */}
-      <View className="absolute bottom-0 w-full bg-white border-t border-slate-200 px-6 pt-4 pb-8 shadow-lg">
+      <View className="absolute bottom-0 w-full bg-white border-t border-slate-200 px-6 pt-4 shadow-lg" style={{ paddingBottom: 100 }}>
         <View className="flex-row justify-between items-center mb-4">
           <Text className="text-slate-900 font-bold text-base capitalize">{selectedTier} Plan</Text>
           <Text className={`font-bold text-lg ${selectedPerk?.color}`}>{selectedPerk?.price}</Text>
