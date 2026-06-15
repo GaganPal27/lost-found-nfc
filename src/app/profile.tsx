@@ -7,6 +7,7 @@ import { useItemStore } from '../stores/itemStore';
 import { PLAN_LIMITS } from '../lib/constants';
 import { supabase } from '../lib/supabase';
 
+
 const PLAN_FEATURES = {
   basic: ['Up to 2 items', 'NFC tags only', '7-day scan history', 'Basic notifications'],
   pro: ['Up to 10 items', 'NFC + BLE tags', '30-day scan history', 'Passive BLE tracking', 'Priority alerts'],
@@ -22,6 +23,7 @@ export default function ProfileScreen() {
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const fadeIn = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -32,6 +34,56 @@ export default function ProfileScreen() {
     await supabase.auth.signOut();
     setSession(null);
     router.replace('/login');
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      '⚠️ Delete Account',
+      'This will permanently delete your account and ALL your data including items, messages, and history. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, Delete My Account',
+          style: 'destructive',
+          onPress: confirmDeleteAccount,
+        },
+      ]
+    );
+  };
+
+  const confirmDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No active session');
+
+      // Call the secure Edge Function (uses service-role key server-side)
+      const res = await fetch(
+        `${(supabase as any).supabaseUrl}/functions/v1/delete-account`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Deletion failed');
+
+      // Clear local session
+      setSession(null);
+      Alert.alert(
+        '✅ Account Deleted',
+        'Your account and all associated data have been permanently deleted. Thank you for using Poki.',
+        [{ text: 'OK', onPress: () => router.replace('/login') }]
+      );
+    } catch (err: any) {
+      Alert.alert('Error', `Could not delete account: ${err.message}\n\nPlease contact gaganpal101722@gmail.com for manual deletion.`);
+    } finally {
+      setDeletingAccount(false);
+    }
   };
 
   const getTierConfig = () => {
@@ -236,13 +288,55 @@ export default function ProfileScreen() {
           {/* Log Out */}
           <TouchableOpacity
             onPress={handleLogout}
-            className="mx-6 bg-slate-100 border border-slate-200 p-4 rounded-2xl items-center mb-5 shadow-sm"
+            className="mx-6 bg-slate-100 border border-slate-200 p-4 rounded-2xl items-center mb-4 shadow-sm"
             activeOpacity={0.7}
           >
             <Text className="text-slate-700 font-bold text-base tracking-wide">Log Out</Text>
           </TouchableOpacity>
 
-          <Text className="text-slate-400 text-xs text-center font-medium">Lost & Found Network v1.0.0</Text>
+          {/* Legal & Privacy */}
+          <View className="mx-6 bg-white border border-slate-200 rounded-3xl overflow-hidden mb-5 shadow-sm">
+            <Text className="text-slate-500 text-xs uppercase tracking-wider px-6 pt-5 pb-3 font-bold">Legal & Privacy</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/privacy-policy')}
+              className="flex-row items-center justify-between px-6 py-4 border-b border-slate-100"
+              activeOpacity={0.7}
+            >
+              <View className="flex-row items-center">
+                <Text className="text-xl mr-3">🔒</Text>
+                <Text className="text-slate-900 font-semibold">Privacy Policy</Text>
+              </View>
+              <Text className="text-slate-400 font-bold">→</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/terms-of-service')}
+              className="flex-row items-center justify-between px-6 py-4"
+              activeOpacity={0.7}
+            >
+              <View className="flex-row items-center">
+                <Text className="text-xl mr-3">📄</Text>
+                <Text className="text-slate-900 font-semibold">Terms of Service</Text>
+              </View>
+              <Text className="text-slate-400 font-bold">→</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Delete Account — DPDP Section 12 Right to Erasure */}
+          <TouchableOpacity
+            onPress={handleDeleteAccount}
+            disabled={deletingAccount}
+            className="mx-6 bg-red-50 border border-red-200 p-4 rounded-2xl items-center mb-6"
+            activeOpacity={0.7}
+          >
+            {deletingAccount ? (
+              <ActivityIndicator color="#ef4444" />
+            ) : (
+              <Text className="text-red-600 font-bold text-sm tracking-wide">🗑️ Delete My Account & All Data</Text>
+            )}
+          </TouchableOpacity>
+
+          <Text className="text-slate-400 text-xs text-center font-medium mb-2">Lost & Found Network v1.0.0</Text>
+          <Text className="text-slate-400 text-xs text-center px-8 mb-4">DPDP Act 2023 compliant. Your data rights are protected.</Text>
         </Animated.View>
       </ScrollView>
     </View>
