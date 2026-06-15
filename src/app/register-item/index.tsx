@@ -150,11 +150,11 @@ export default function RegisterItemScreen() {
       }
 
       if (tagType === 'nfc_ble') {
-        router.push({ pathname: '/nfc-ble-setup', params: { id: data.id, nfc_uid: nfc_uid || '', ble_beacon_id: ble_beacon_id || '' } });
+        router.push({ pathname: '/nfc-ble-setup', params: { id: data.id, nfc_uid: nfc_uid || '', ble_beacon_id: ble_beacon_id || '', service_uuid: service_uuid || '' } });
       } else {
         router.push({
           pathname: '/register-item/write-tag',
-          params: { id: data.id, nfc_uid: nfc_uid || '', ble_beacon_id: ble_beacon_id || '', tag_type: tagType },
+          params: { id: data.id, nfc_uid: nfc_uid || '', ble_beacon_id: ble_beacon_id || '', tag_type: tagType, service_uuid: service_uuid || '' },
         });
       }
     } catch (e: any) {

@@ -11,11 +11,12 @@ import * as Haptics from 'expo-haptics';
 type Mode = 'choose' | 'writing' | 'linking' | 'success';
 
 export default function WriteTagScreen() {
-  const { id, nfc_uid, ble_beacon_id, tag_type } = useLocalSearchParams<{
+  const { id, nfc_uid, ble_beacon_id, tag_type, service_uuid } = useLocalSearchParams<{
     id: string;
     nfc_uid: string;
     ble_beacon_id: string;
     tag_type: string;
+    service_uuid: string;
   }>();
   const router = useRouter();
 
@@ -26,6 +27,7 @@ export default function WriteTagScreen() {
   const itemId = String(id);
   const presetNfcUid = String(nfc_uid); // UUID pre-generated for programmed tags
   const beaconId = String(ble_beacon_id);
+  const serviceUuid = String(service_uuid);
 
   const isNFC = tagType === 'nfc_only' || tagType === 'nfc_ble';
   const isBLE = tagType === 'ble_only' || tagType === 'nfc_ble';
@@ -76,7 +78,7 @@ export default function WriteTagScreen() {
     // Format: https://[domain]/i/[uuid] → edge function redirects to app
     const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
     const edgeDomain = SUPABASE_URL.replace('https://', '').replace('.supabase.co', '');
-    const url = `https://${edgeDomain}.supabase.co/functions/v1/deep-link?type=lost-post&id=${presetNfcUid}`;
+    const url = `https://${edgeDomain}.supabase.co/functions/v1/deep-link?type=item&id=${presetNfcUid}`;
     const wrote = await writeNDEFUrl(url);
 
     if (wrote) {
@@ -174,8 +176,25 @@ export default function WriteTagScreen() {
                 <Text className="text-primary font-bold text-sm">Copy</Text>
               </TouchableOpacity>
             </View>
+
+            <Text className="text-slate-500 text-xs uppercase tracking-wider mb-3 font-bold mt-2">Service UUID (iOS Background Support)</Text>
+            <View className="bg-slate-50 rounded-2xl px-4 py-3 flex-row justify-between items-center border border-slate-200 mb-4">
+              <Text className="text-primary font-mono text-[10px] font-bold" numberOfLines={1}>{serviceUuid}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  Clipboard.setString(serviceUuid);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  Alert.alert('Copied!', 'Service UUID copied to clipboard.');
+                }}
+                activeOpacity={0.7}
+                className="bg-primary/10 border border-primary/20 px-3 py-2 rounded-xl ml-2"
+              >
+                <Text className="text-primary font-bold text-sm">Copy</Text>
+              </TouchableOpacity>
+            </View>
+
             <Text className="text-slate-500 text-xs leading-5 font-medium">
-              This ID is stored in our database. Your beacon must broadcast exactly this name for the app to detect it.
+              These IDs are required for dual-mode tracking (Name + UUID). Your beacon must broadcast both for the app to detect it reliably.
             </Text>
           </View>
 
@@ -207,9 +226,10 @@ export default function WriteTagScreen() {
           {/* Firmware snippet */}
           <View className="bg-slate-900 border border-slate-700 rounded-2xl p-4 mb-8 shadow-inner">
             <Text className="text-slate-400 text-xs uppercase tracking-wider mb-3 font-bold">Firmware Snippet</Text>
-            <Text className="text-green-400 font-mono text-xs leading-6">
-              {`// In beacon.ino, change this line:
+            <Text className="text-green-400 font-mono text-[10px] leading-5">
+              {`// In beacon.ino, change these lines:
 #define BEACON_NAME "${beaconId}"
+#define SERVICE_UUID "${serviceUuid}"
 
 // The rest of the firmware stays the same.
 // Flash → your beacon is live!`}
