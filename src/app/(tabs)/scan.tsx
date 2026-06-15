@@ -13,7 +13,7 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 
 type ScanMode = 'nfc' | 'ble' | 'qr';
-type BLEResult = { name: string; rssi: number; item?: { id: string; item_name: string; user_id: string } | null };
+type BLEResult = { name: string; rssi: number; serviceUUID?: string; item?: { id: string; item_name: string; user_id: string } | null };
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -99,7 +99,7 @@ export default function ScanScreen() {
 
       const result = await scanForNearbyBeacons(
         (device) => {
-          found.push({ name: device.name, rssi: device.rssi });
+          found.push({ name: device.name, rssi: device.rssi, serviceUUID: device.serviceUUID });
           setBleResults([...found]);
         },
         8000,
@@ -253,7 +253,12 @@ export default function ScanScreen() {
                         <Text className="text-2xl mr-3">{isKnown ? '🎯' : '📡'}</Text>
                         <View>
                           <Text className="text-slate-900 font-bold text-base">{d.name}</Text>
-                          <Text className="text-slate-500 text-xs font-medium">RSSI: {d.rssi} dBm</Text>
+                          <View className="flex-row items-center mt-0.5">
+                            <Text className="text-slate-500 text-xs font-medium mr-2">RSSI: {d.rssi} dBm</Text>
+                            {d.serviceUUID && (
+                              <Text className="text-slate-400 text-[10px] font-mono">UUID: {d.serviceUUID.split('-')[0]}...</Text>
+                            )}
+                          </View>
                         </View>
                       </View>
                       <View className="items-end">

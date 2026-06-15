@@ -6,7 +6,7 @@ import { writeNDEFUrl } from '../lib/nfc';
 type Step = 'nfc' | 'ble' | 'done';
 
 export default function NFCBLESetupScreen() {
-  const { id, nfc_uid, ble_beacon_id } = useLocalSearchParams();
+  const { id, nfc_uid, ble_beacon_id, service_uuid } = useLocalSearchParams();
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState<Step>('nfc');
   const [nfcWriting, setNfcWriting] = useState(false);
@@ -14,6 +14,7 @@ export default function NFCBLESetupScreen() {
 
   const nfcUid = String(nfc_uid);
   const beaconId = String(ble_beacon_id);
+  const serviceUuid = String(service_uuid);
 
   // NFC pulse animation
   const pulse = useRef(new Animated.Value(1)).current;
@@ -46,7 +47,9 @@ export default function NFCBLESetupScreen() {
   const handleWriteNFC = async () => {
     setNfcWriting(true);
     startPulse();
-    const url = `https://lostandfound.app/item/${nfcUid}`;
+    const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+    const edgeDomain = SUPABASE_URL.replace('https://', '').replace('.supabase.co', '');
+    const url = `https://${edgeDomain}.supabase.co/functions/v1/deep-link?type=item&id=${nfcUid}`;
     const wrote = await writeNDEFUrl(url);
     setNfcWriting(false);
     stopPulse();
@@ -180,27 +183,26 @@ export default function NFCBLESetupScreen() {
               </Text>
             </View>
 
-            {/* Beacon ID */}
-            <View className="bg-slate-50 border border-slate-200 rounded-2xl py-5 px-6 items-center mb-6 shadow-inner">
+            {/* Beacon ID & Service UUID */}
+            <View className="bg-slate-50 border border-slate-200 rounded-2xl py-5 px-6 items-center mb-6 shadow-inner w-full">
               <Text className="text-slate-500 text-xs mb-2 uppercase tracking-wider font-bold">Beacon Broadcast Name</Text>
-              <Text className="text-primary font-mono text-2xl font-bold tracking-widest">{beaconId}</Text>
+              <Text className="text-primary font-mono text-2xl font-bold tracking-widest text-center">{beaconId}</Text>
+              
+              <Text className="text-slate-500 text-xs mt-6 mb-2 uppercase tracking-wider font-bold">Service UUID</Text>
+              <Text className="text-primary font-mono text-xs font-bold text-center" selectable>{serviceUuid}</Text>
             </View>
 
-            {/* Instructions */}
-            <View className="bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-100">
-              {[
-                'Open your beacon\'s companion app (e.g. nRF Toolbox, EddyStone config)',
-                'Navigate to "Broadcast Name" or "Device Name" settings',
-                `Set the name to exactly: ${beaconId}`,
-                'Save and restart the beacon',
-              ].map((step, i) => (
-                <View key={i} className="flex-row items-start py-2">
-                  <View className="w-5 h-5 bg-primary/10 border border-primary/20 rounded-full items-center justify-center mr-3 mt-0.5">
-                    <Text className="text-primary text-xs font-bold">{i + 1}</Text>
-                  </View>
-                  <Text className="text-slate-600 text-sm leading-5 flex-1 font-medium">{step}</Text>
-                </View>
-              ))}
+            {/* Firmware snippet */}
+            <View className="bg-slate-900 border border-slate-700 rounded-2xl p-4 mb-8 shadow-inner w-full">
+              <Text className="text-slate-400 text-xs uppercase tracking-wider mb-3 font-bold">Firmware Snippet</Text>
+              <Text className="text-green-400 font-mono text-[10px] leading-5">
+                {`// In beacon.ino, change these lines:
+#define BEACON_NAME "${beaconId}"
+#define SERVICE_UUID "${serviceUuid}"
+
+// The rest of the firmware stays the same.
+// Flash → your beacon is live!`}
+              </Text>
             </View>
 
             <TouchableOpacity
