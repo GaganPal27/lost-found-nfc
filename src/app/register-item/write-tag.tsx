@@ -72,7 +72,11 @@ export default function WriteTagScreen() {
   // ── Program Blank Tag ──────────────────────────────────────────────────────
   const handleProgramTag = async () => {
     setMode('writing');
-    const url = `https://lostandfound.app/item/${presetNfcUid}`;
+    // SPRINT 1 FIX: Write real edge function URL (short format for NTAG213 ~135 byte limit)
+    // Format: https://[domain]/i/[uuid] → edge function redirects to app
+    const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+    const edgeDomain = SUPABASE_URL.replace('https://', '').replace('.supabase.co', '');
+    const url = `https://${edgeDomain}.supabase.co/functions/v1/deep-link?type=lost-post&id=${presetNfcUid}`;
     const wrote = await writeNDEFUrl(url);
 
     if (wrote) {

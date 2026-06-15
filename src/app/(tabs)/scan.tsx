@@ -59,7 +59,8 @@ export default function ScanScreen() {
       };
       let item = null;
       if (url) {
-        const m = url.match(/\/item\/([a-zA-Z0-9-]+)/);
+        // Match both old format (/item/UUID) and new edge function format (?id=UUID)
+        const m = url.match(/[?&]id=([a-zA-Z0-9-]+)/) || url.match(/\/item\/([a-zA-Z0-9-]+)/) || url.match(/\/i\/([a-zA-Z0-9-]+)/);
         if (m?.[1]) item = await lookupByUid(m[1]);
       }
       if (!item && hardwareId) item = await lookupByUid(hardwareId);
@@ -85,10 +86,25 @@ export default function ScanScreen() {
     const found: BLEResult[] = [];
 
     try {
-      const result = await scanForNearbyBeacons((device) => {
-        found.push({ name: device.name, rssi: device.rssi });
-        setBleResults([...found]);
-      }, 8000);
+      // Sprint 1: fetch this user's registered service_uuids for UUID-based matching
+      let knownServiceUUIDs: string[] = [];
+      if (user?.id) {
+        const { data: userItems } = await supabase
+          .from('items')
+          .select('service_uuid')
+          .eq('user_id', user.id)
+          .not('service_uuid', 'is', null);
+        knownServiceUUIDs = (userItems ?? []).map((i: any) => i.service_uuid).filter(Boolean);
+      }
+
+      const result = await scanForNearbyBeacons(
+        (device) => {
+          found.push({ name: device.name, rssi: device.rssi });
+          setBleResults([...found]);
+        },
+        8000,
+        knownServiceUUIDs, // pass known UUIDs for service UUID matching
+      );
 
       if (result?.permissionDenied) {
         Alert.alert(
@@ -98,9 +114,16 @@ export default function ScanScreen() {
         );
         return;
       }
-      // Enrich with DB items
+
+      // Enrich with DB items — match by beacon name OR service_uuid
       const enriched = await Promise.all(found.map(async (d) => {
-        const { data } = await supabase.from('items').select('id,item_name,user_id').eq('ble_beacon_id', d.name).neq('status', 'deleted').maybeSingle();
+        // Try name match first
+        let { data } = await supabase
+          .from('items')
+          .select('id,item_name,user_id')
+          .eq('ble_beacon_id', d.name)
+          .neq('status', 'deleted')
+          .maybeSingle();
         return { ...d, item: data };
       }));
       setBleResults(enriched);
@@ -122,20 +145,21 @@ export default function ScanScreen() {
         }
       } catch { /* location optional */ }
 
-      if (found.length === 0) Alert.alert('No Beacons', 'No LF-BLE beacons detected nearby. Make sure your beacon is powered on.');
+      if (found.length === 0) Alert.alert('No Beacons', 'No Poki beacons detected nearby. Make sure your beacon is powered on.');
       else await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       setScanning(false);
       stopPulse();
     }
-  }, []);
+  }, [user]);
 
   // ── QR ────────────────────────────────────────────────────────────────────
   const handleQRScanned = async ({ data }: { data: string }) => {
     if (qrScanned) return;
     setQrScanned(true);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const m = data.match(/\/item\/([a-zA-Z0-9-]+)/);
+    // Match both old format (/item/UUID) and new edge function format (?id=UUID or /i/UUID)
+    const m = data.match(/[?&]id=([a-zA-Z0-9-]+)/) || data.match(/\/item\/([a-zA-Z0-9-]+)/) || data.match(/\/i\/([a-zA-Z0-9-]+)/);
     if (m?.[1]) {
       const { data: item } = await supabase.from('items').select('id,item_name,user_id,status').eq('nfc_uid', m[1]).neq('status', 'deleted').maybeSingle();
       if (item) {

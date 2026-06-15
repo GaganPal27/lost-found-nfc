@@ -13,6 +13,7 @@ import EntitlementGate from '../../components/subscription/EntitlementGate';
 import { PLAN_LIMITS } from '../../lib/constants';
 import { generateFMDNKeyPair, registerFMDNKeys, generateFirmwareConfig } from '../../lib/fmdn';
 import { generateOpenHaystackKeyPair, registerOpenHaystackKeys } from '../../lib/openhaystack';
+import { generateServiceUUID } from '../../lib/ble';
 
 type TagType = 'nfc_only' | 'nfc_ble' | 'ble_only';
 
@@ -90,6 +91,9 @@ export default function RegisterItemScreen() {
       setLoading(true);
       const nfc_uid = tagType !== 'ble_only' ? generateUUID() : null;
       const ble_beacon_id = tagType !== 'nfc_only' ? `LF-BLE-${generateUUID().slice(0, 6).toUpperCase()}` : null;
+      // Generate deterministic Service UUID from beacon ID (Sprint 1)
+      // This UUID is programmed into ESP32 firmware AND stored in DB for Service UUID matching
+      const service_uuid = ble_beacon_id ? generateServiceUUID(ble_beacon_id) : null;
 
       const { data, error } = await supabase.from('items').insert({
         user_id: user?.id,
@@ -100,6 +104,7 @@ export default function RegisterItemScreen() {
         image_url: imageUri,
         nfc_uid,
         ble_beacon_id,
+        service_uuid,
         tag_type: tagType,
         status: 'active',
         tracking_networks: tagType !== 'nfc_only' ? ['app_relay'] : [],
