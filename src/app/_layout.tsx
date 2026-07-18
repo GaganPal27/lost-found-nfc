@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Slot, useRouter, useSegments, usePathname } from 'expo-router';
+import { Slot, Stack, useRouter, useSegments, usePathname } from 'expo-router';
 import { StatusBar, Platform, AppState, AppStateStatus, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
@@ -88,6 +88,11 @@ export default function RootLayout() {
       await setSession(session);
       await refreshTier();
       if (session?.user?.id) safeRegisterPushToken(session.user.id);
+    }).catch(async (err) => {
+      console.warn("Auth initialization failed:", err);
+      // Force initialization so the app doesn't spin forever
+      await setSession(null);
+      await refreshTier();
     });
 
     // Guard: only call setSession when the session actually changes
@@ -245,10 +250,20 @@ export default function RootLayout() {
     }
   }, [session, authInitialized, subInitialized, segments]);
 
+  const hideTabBarPrefixes = [
+    '/group',
+    '/post',
+    '/create-lost-post',
+    '/create-community-post',
+    '/create-group',
+    '/community-claim',
+  ];
+  const shouldHideTabBar = hideTabBarPrefixes.some((prefix) => pathname?.startsWith(prefix));
+
   return (
     <View style={{ flex: 1 }}>
       <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
-      <Slot />
+      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
       
       {/* Render active bubbles over everything */}
       {bubbles.map((b, idx) => (
@@ -260,8 +275,8 @@ export default function RootLayout() {
         />
       ))}
       
-      {/* Render floating tab bar everywhere except group chat screens */}
-      {session && !inAuthScreen && !inOnboarding && !pathname?.startsWith('/group') && (
+      {/* Render floating tab bar everywhere except group and post screens */}
+      {session && !inAuthScreen && !inOnboarding && !shouldHideTabBar && (
         <FloatingTabBar
           activeRoute={TAB_ROUTES.find(t => pathname && pathname.includes(t.name))?.name ?? 'my-items'}
           onTabPress={(route) => router.push(`/(tabs)/${route}` as any)}

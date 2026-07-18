@@ -16,26 +16,8 @@ const TAG_OPTIONS = [
     icon: '📱',
     desc: 'Sticker tag on your item. Any phone can scan it to get your contact info instantly.',
     requiredTier: 'basic',
-    badge: 'Free',
+    badge: 'Premium',
     badgeColor: 'bg-green-100 border-green-200 text-green-700',
-  },
-  {
-    id: 'nfc_ble' as TagType,
-    label: 'NFC + BLE',
-    icon: '🔗',
-    desc: 'Combines NFC sticker with a BLE beacon. Passive location tracking even without scanning.',
-    requiredTier: 'pro',
-    badge: 'Pro',
-    badgeColor: 'bg-blue-100 border-blue-200 text-blue-700',
-  },
-  {
-    id: 'ble_only' as TagType,
-    label: 'BLE Only',
-    icon: '📡',
-    desc: 'BLE beacon only — no sticker needed. Item appears on the passive tracking map automatically.',
-    requiredTier: 'max',
-    badge: 'Max',
-    badgeColor: 'bg-red-100 border-red-200 text-red-700',
   },
 ];
 

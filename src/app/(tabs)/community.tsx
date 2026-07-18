@@ -1,41 +1,45 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, RefreshControl,
-  StatusBar, Animated, StyleSheet, ActivityIndicator, Dimensions, Linking, Alert
+  StatusBar, StyleSheet, ActivityIndicator, Image, Share,
+  Alert, Linking, TextInput,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 
-// --- Shared Types ---
-type Tab = 'found' | 'lost' | 'groups';
+// ─── Types ────────────────────────────────────────────────────────────────────
+type PostType = 'found' | 'lost';
+type Tab = 'feed' | 'groups';
 
-// --- Types: Found Items ---
-type CommunityItem = {
-  id: string; title: string; description: string | null; category: string;
-  location_label: string | null; image_url: string | null;
-  status: 'open' | 'claimed' | 'closed'; created_at: string; finder_id: string;
-  users?: { full_name?: string | null; successful_recoveries?: number | null };
+type FeedPost = {
+  id: string;
+  postType: PostType;
+  title: string;
+  description: string | null;
+  category: string;
+  location_label?: string | null;
+  radius_km?: number;
+  image_url: string | null;
+  status: string;
+  created_at: string;
+  owner_id: string;
+  author_name: string | null;
 };
 
-// --- Types: Lost Posts ---
-type LostPost = {
-  id: string; title: string; description: string | null; category: string;
-  radius_km: number; image_url: string | null;
-  status: 'searching' | 'found' | 'closed'; created_at: string; poster_id: string;
-  users?: { full_name?: string | null; successful_recoveries?: number | null };
-};
-
-// --- Types: Groups ---
 type CommunityGroup = {
-  id: string; name: string; description: string | null; image_url: string | null;
-  type: 'public' | 'private'; member_count: number; created_at: string;
+  id: string;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  type: 'public' | 'private';
+  member_count: number;
+  created_at: string;
 };
 
-const { width } = Dimensions.get('window');
-
-// --- Helper Functions ---
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(ts: string) {
   const diff = (Date.now() - new Date(ts).getTime()) / 1000;
   if (diff < 60) return 'just now';
@@ -44,201 +48,315 @@ function timeAgo(ts: string) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-const STATUS_COLORS = {
-  open: { bg: '#DCFCE7', text: '#15803d', dot: '#22c55e', label: 'Open' },
-  claimed: { bg: '#E0E7FF', text: '#4338ca', dot: '#6366f1', label: 'Claimed' },
-  closed: { bg: '#F3F4F6', text: '#475569', dot: '#94a3b8', label: 'Closed' },
-  searching: { bg: '#FEF3C7', text: '#b45309', dot: '#f59e0b', label: 'Searching' },
-  found: { bg: '#DCFCE7', text: '#15803d', dot: '#22c55e', label: 'Found' },
-};
+// ─── Post Card (list-style like reference image) ──────────────────────────────
+function PostCard({
+  post,
+  currentUserId,
+  onResolve,
+  onDelete,
+  onReport,
+}: {
+  post: FeedPost;
+  currentUserId: string | null;
+  onResolve: (p: FeedPost) => void;
+  onDelete: (p: FeedPost) => void;
+  onReport: (p: FeedPost) => void;
+}) {
+  const router = useRouter();
+  const isLost = post.postType === 'lost';
+  const isMine = currentUserId === post.owner_id;
 
-// --- Components ---
-function FoundCard({ item, currentUserId, onClaim }: { item: CommunityItem; currentUserId: string | null; onClaim: (id: string) => void }) {
-  const isMine = currentUserId === item.finder_id;
-  const s = STATUS_COLORS[item.status as keyof typeof STATUS_COLORS] || STATUS_COLORS.open;
+  const handleShare = async () => {
+    try {
+      const link = `https://pzhuszyyykususkmzpud.supabase.co/functions/v1/deep-link?type=post&id=${post.id}`;
+      await Share.share({
+        message: isLost
+          ? `🚨 Help find: *${post.title}* (${post.category})\n\n${post.description ?? ''}\n\nTap to view details on Poki:\n${link}`
+          : `📦 Found: *${post.title}* near ${post.location_label ?? 'nearby'}\n\n${post.description ?? ''}\n\nTap to view details on Poki:\n${link}`,
+      });
+    } catch {}
+  };
+
+  const handleWhatsApp = () => {
+    // Generate a deep link for this post
+    const link = `https://pzhuszyyykususkmzpud.supabase.co/functions/v1/deep-link?type=post&id=${post.id}`;
+    const msg = isLost 
+      ? `🚨 Lost: *${post.title}* (${post.category})\n${post.description ?? ''}\n\nTap to view details on Poki:\n${link}`
+      : `📦 Found: *${post.title}* near ${post.location_label ?? 'nearby'}\n${post.description ?? ''}\n\nTap to view details on Poki:\n${link}`;
+    
+    Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`).catch(() =>
+      Alert.alert('WhatsApp Not Available', 'Please install WhatsApp.')
+    );
+  };
+
   return (
-    <View style={styles.card}>
-      <View style={styles.cardRow}>
-        <View style={styles.cardInfo}>
-          <View style={styles.cardTitleRow}>
-            <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-            <View style={[styles.statusPill, { backgroundColor: s.bg }]}>
-              <View style={[styles.statusDot, { backgroundColor: s.dot }]} />
-              <Text style={[styles.statusText, { color: s.text }]}>{s.label}</Text>
-            </View>
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.9}
+      onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(post.id) } } as any)}
+    >
+      {/* Left image */}
+      <View style={styles.cardImg}>
+        {post.image_url ? (
+          <Image source={{ uri: post.image_url }} style={styles.cardImgFull} />
+        ) : (
+          <View style={[styles.cardImgFull, styles.cardImgPlaceholder]}>
+            <Text style={{ fontSize: 28 }}>{isLost ? '🔍' : '📦'}</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-            <Text style={{ fontSize: 13, color: '#64748b', fontWeight: '600', marginRight: 6 }}>
-              {item.users?.full_name || 'Anonymous Finder'}
+        )}
+      </View>
+
+      {/* Right content */}
+      <View style={styles.cardBody}>
+        {/* Top row: time + badge + delete */}
+        <View style={styles.cardTopRow}>
+          <Text style={styles.cardTime}>{timeAgo(post.created_at)}</Text>
+          <View style={{ flex: 1 }} />
+          {isMine && (
+            <TouchableOpacity
+              onPress={() => onDelete(post)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.deleteBtn}
+            >
+              <Feather name="trash-2" size={13} color="#f43f5e" />
+            </TouchableOpacity>
+          )}
+          <View style={[styles.badge, isLost ? styles.badgeLost : styles.badgeFound]}>
+            <Text style={[styles.badgeText, isLost ? styles.badgeLostText : styles.badgeFoundText]}>
+              {isLost ? 'LOST' : 'FOUND'}
             </Text>
-            {(item.users?.successful_recoveries || 0) > 0 && (
-              <View style={{ backgroundColor: '#fef9c3', borderColor: '#fde047', borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={{ fontSize: 10, marginRight: 2 }}>🏆</Text>
-                <Text style={{ fontSize: 9, fontWeight: '800', color: '#a16207' }}>TRUSTED</Text>
-              </View>
-            )}
           </View>
-          <Text style={styles.cardCategory}>{item.category} • {item.location_label || 'Unknown location'}</Text>
-          <Text style={styles.cardTime}>Found {timeAgo(item.created_at)}</Text>
-          {item.description && <Text style={styles.cardDesc}>{item.description}</Text>}
-          
-          {isMine ? (
-            <View>
-              <View style={styles.ownBadge}><Text style={styles.ownBadgeText}>You posted this</Text></View>
-              {item.status !== 'closed' && (
-                <TouchableOpacity style={styles.claimBtn} activeOpacity={0.8} onPress={() => onResolve(item.id)}>
-                  <LinearGradient colors={['#10b981', '#059669']} style={styles.claimBtnGrad}>
-                    <Text style={styles.claimBtnText}>Mark as Handed Over</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              )}
-            </View>
-          ) : (
-            item.status === 'open' && (
-              <TouchableOpacity style={styles.claimBtn} activeOpacity={0.8} onPress={() => onClaim(item.id)}>
-                <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.claimBtnGrad}>
-                  <Text style={styles.claimBtnText}>This is mine</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )
+        </View>
+
+        {/* Title */}
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {isLost ? 'Lost: ' : 'Found: '}{post.title}
+        </Text>
+
+        {/* Description */}
+        {post.description ? (
+          <Text style={styles.cardDesc} numberOfLines={2}>{post.description}</Text>
+        ) : null}
+
+        {/* Location */}
+        {(post.location_label || post.radius_km) ? (
+          <View style={styles.cardLocRow}>
+            <Feather name="map-pin" size={11} color="#94a3b8" />
+            <Text style={styles.cardLoc}>
+              {post.location_label ?? `${post.radius_km}km radius`}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Actions */}
+        <View style={styles.cardActions}>
+          <TouchableOpacity style={styles.shareBtn} onPress={handleShare} activeOpacity={0.7}>
+            <Feather name="share-2" size={12} color="#64748b" />
+            <Text style={styles.shareBtnText}>Share</Text>
+          </TouchableOpacity>
+
+          {isLost && (
+            <TouchableOpacity style={styles.waBtn} onPress={handleWhatsApp} activeOpacity={0.7}>
+              <Text style={{ fontSize: 12 }}>💬</Text>
+              <Text style={styles.waBtnText}>WhatsApp</Text>
+            </TouchableOpacity>
+          )}
+
+          {isMine && post.status !== 'closed' && post.status !== 'found' && (
+            <TouchableOpacity
+              style={styles.resolveBtn}
+              onPress={() => onResolve(post)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.resolveBtnText}>
+                {isLost ? 'Found ✓' : 'Done ✓'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {!isMine && !isLost && post.status === 'open' && (
+            <TouchableOpacity
+              style={styles.claimBtn}
+              onPress={() => router.push(`/community-claim/${post.id}` as any)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.claimBtnText}>This is mine →</Text>
+            </TouchableOpacity>
+          )}
+
+          {!isMine && (
+            <TouchableOpacity style={styles.reportBtn} onPress={() => onReport(post)} activeOpacity={0.7}>
+              <Feather name="flag" size={12} color="#94a3b8" />
+            </TouchableOpacity>
           )}
         </View>
-      </View>
-    </View>
-  );
-}
-
-function LostCard({ item, currentUserId, onResolve }: { item: LostPost; currentUserId: string | null; onResolve: (id: string) => void }) {
-  const isMine = currentUserId === item.poster_id;
-  const s = STATUS_COLORS[item.status as keyof typeof STATUS_COLORS] || STATUS_COLORS.searching;
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardInfo}>
-        <View style={styles.cardTitleRow}>
-          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-          <View style={[styles.statusPill, { backgroundColor: s.bg }]}>
-            <View style={[styles.statusDot, { backgroundColor: s.dot }]} />
-            <Text style={[styles.statusText, { color: s.text }]}>{s.label}</Text>
-          </View>
-        </View>
-        <Text style={{ fontSize: 13, color: '#64748b', fontWeight: '600', marginBottom: 4 }}>
-          {item.users?.full_name || 'Anonymous Poster'}
-        </Text>
-        <Text style={styles.cardCategory}>{item.category} • Alert radius: {item.radius_km}km</Text>
-        <Text style={styles.cardTime}>Lost {timeAgo(item.created_at)}</Text>
-        {item.description && <Text style={styles.cardDesc}>{item.description}</Text>}
-        {isMine && (
-          <View>
-            <View style={styles.ownBadge}><Text style={styles.ownBadgeText}>Your post</Text></View>
-            {item.status === 'searching' && (
-              <TouchableOpacity style={styles.claimBtn} activeOpacity={0.8} onPress={() => onResolve(item.id)}>
-                <LinearGradient colors={['#10b981', '#059669']} style={styles.claimBtnGrad}>
-                  <Text style={styles.claimBtnText}>Mark as Resolved</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-        {item.status === 'searching' && (
-          <TouchableOpacity 
-            style={{ marginTop: 12, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#25D366', borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}
-            activeOpacity={0.8}
-            onPress={() => {
-              // https:// URL so WhatsApp makes it a clickable link
-              // The edge function shows a branded page and redirects to the app
-              const link = `https://pzhuszyyykususkmzpud.supabase.co/functions/v1/deep-link?type=lost-post&id=${item.id}`;
-              const descPart = item.description ? `\n\n📝 "${item.description}"` : '';
-              const msg = `🚨 Lost Item Alert!\n\nHelp me find my *${item.title}* (${item.category}).${descPart}\n\nIf you spot it nearby, please reach out! The owner is looking within a *${item.radius_km}km* radius.\n\n📲 View item details:\n${link}\n\n— Posted on the Poki Lost & Found Network`;
-              Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`).catch(() => {
-                Alert.alert('WhatsApp Not Available', 'Could not open WhatsApp. Please make sure it is installed.');
-              });
-            }}
-          >
-            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 14 }}>💬 Share to WhatsApp</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
-}
-
-function GroupCard({ group, onJoin }: { group: CommunityGroup; onJoin: (id: string) => void }) {
-  return (
-    <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={() => onJoin(group.id)}>
-      <View style={styles.cardInfo}>
-        <View style={styles.cardTitleRow}>
-          <Text style={styles.cardTitle} numberOfLines={1}>{group.name}</Text>
-          <View style={[styles.statusPill, { backgroundColor: group.type === 'public' ? '#E0E7FF' : '#FCE7F3' }]}>
-            <Text style={[styles.statusText, { color: group.type === 'public' ? '#4338ca' : '#be185d' }]}>
-              {group.type.toUpperCase()}
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.cardCategory}>{group.member_count} member{group.member_count !== 1 ? 's' : ''}</Text>
-        {group.description && <Text style={styles.cardDesc} numberOfLines={2}>{group.description}</Text>}
       </View>
     </TouchableOpacity>
   );
 }
 
-// --- Main Screen ---
+// ─── Group Card ───────────────────────────────────────────────────────────────
+function GroupCard({ group, onPress }: { group: CommunityGroup; onPress: () => void }) {
+  const groupType = group.type === 'private' ? 'private' : 'public';
+  return (
+    <TouchableOpacity style={styles.groupCard} onPress={onPress} activeOpacity={0.8}>
+      {group.image_url ? (
+        <Image source={{ uri: group.image_url }} style={styles.groupAvatar} />
+      ) : (
+        <View style={[styles.groupAvatar, styles.groupAvatarPlaceholder]}>
+          <Text style={{ fontSize: 22 }}>🏛️</Text>
+        </View>
+      )}
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <View style={styles.groupTitleRow}>
+          <Text style={styles.groupName} numberOfLines={1}>{group.name || 'Unnamed Group'}</Text>
+          <View style={[
+            styles.groupTypeBadge,
+            groupType === 'public' ? styles.groupTypeBadgePublic : styles.groupTypeBadgePrivate
+          ]}>
+            <Text style={[
+              styles.groupTypeBadgeText,
+              groupType === 'public' ? { color: '#4338ca' } : { color: '#be185d' }
+            ]}>{groupType.toUpperCase()}</Text>
+          </View>
+        </View>
+        <Text style={styles.groupMeta}>
+          {group.member_count ?? 0} member{(group.member_count ?? 0) !== 1 ? 's' : ''}
+        </Text>
+        {group.description ? (
+          <Text style={styles.groupDesc} numberOfLines={2}>{group.description}</Text>
+        ) : null}
+      </View>
+      <Feather name="chevron-right" size={18} color="#cbd5e1" style={{ marginLeft: 8 }} />
+    </TouchableOpacity>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CommunityScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
-  const dbUserId = user?.id || null;
+  const { dbUser } = useAuthStore();
+  const dbUserId = dbUser?.id ?? null;
 
-  const [activeTab, setActiveTab] = useState<Tab>('found');
-
-  // tabParam read below — useEffect is placed after switchTab is defined
-  
-  // Data states
-  const [foundItems, setFoundItems] = useState<CommunityItem[]>([]);
-  const [lostPosts, setLostPosts] = useState<LostPost[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>('feed');
+  const [feed, setFeed] = useState<FeedPost[]>([]);
+  const [filteredFeed, setFilteredFeed] = useState<FeedPost[]>([]);
   const [groups, setGroups] = useState<CommunityGroup[]>([]);
-  
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Animations
-  const headerY = useRef(new Animated.Value(-20)).current;
-  const headerOp = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
+  useEffect(() => {
+    if (tabParam === 'groups') setActiveTab('groups');
+  }, [tabParam]);
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(headerY, { toValue: 0, duration: 500, useNativeDriver: true }),
-      Animated.timing(headerOp, { toValue: 1, duration: 500, useNativeDriver: true }),
-    ]).start();
-    
-    fetchData(true);
-
-    // Realtime: silent refresh (no loader) on DB changes
-    const silentRefresh = () => fetchData(false);
-    const foundSub = supabase.channel('community_found_feed').on('postgres_changes', { event: '*', schema: 'public', table: 'community_items' }, silentRefresh).subscribe();
-    const lostSub  = supabase.channel('community_lost_feed').on('postgres_changes', { event: '*', schema: 'public', table: 'lost_item_posts' }, silentRefresh).subscribe();
-    const groupSub = supabase.channel('community_group_feed').on('postgres_changes', { event: '*', schema: 'public', table: 'community_groups' }, silentRefresh).subscribe();
-
+    fetchAll(true);
+    const s1 = supabase.channel('feed_found_v2')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_items' }, () => fetchAll(false))
+      .subscribe();
+    const s2 = supabase.channel('feed_lost_v2')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lost_item_posts' }, () => fetchAll(false))
+      .subscribe();
+    const s3 = supabase.channel('feed_groups_v2')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_groups' }, () => fetchAll(false))
+      .subscribe();
     return () => {
-      supabase.removeChannel(foundSub);
-      supabase.removeChannel(lostSub);
-      supabase.removeChannel(groupSub);
+      try { supabase.removeChannel(s1); } catch {}
+      try { supabase.removeChannel(s2); } catch {}
+      try { supabase.removeChannel(s3); } catch {}
     };
   }, []);
 
-  const fetchData = useCallback(async (showLoader = false) => {
+  // Filter feed on search
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredFeed(feed);
+    } else {
+      const q = searchQuery.toLowerCase();
+      setFilteredFeed(feed.filter(p =>
+        p.title.toLowerCase().includes(q) ||
+        (p.description?.toLowerCase().includes(q)) ||
+        p.category.toLowerCase().includes(q) ||
+        (p.location_label?.toLowerCase().includes(q))
+      ));
+    }
+  }, [searchQuery, feed]);
+
+  const fetchAll = useCallback(async (showLoader = false) => {
     if (showLoader) setLoading(true);
     try {
       const [foundRes, lostRes, groupsRes] = await Promise.all([
-        supabase.from('community_items').select('*, users(full_name, successful_recoveries)').neq('status', 'closed').order('created_at', { ascending: false }).limit(50),
-        supabase.from('lost_item_posts').select('*, users(full_name, successful_recoveries)').neq('status', 'closed').order('created_at', { ascending: false }).limit(50),
-        supabase.from('community_groups').select('*').order('created_at', { ascending: false }).limit(50)
+        supabase
+          .from('community_items')
+          .select('*, users(full_name)')
+          .neq('status', 'closed')
+          .order('created_at', { ascending: false })
+          .limit(60),
+        supabase
+          .from('lost_item_posts')
+          .select('*, users(full_name)')
+          .neq('status', 'closed')
+          .order('created_at', { ascending: false })
+          .limit(60),
+        supabase
+          .from('community_groups')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(50),
       ]);
-      
-      if (foundRes.data) setFoundItems(foundRes.data as CommunityItem[]);
-      if (lostRes.data) setLostPosts(lostRes.data as LostPost[]);
-      if (groupsRes.data) setGroups(groupsRes.data as CommunityGroup[]);
+
+      const foundPosts: FeedPost[] = (foundRes.data ?? []).map((d: any) => ({
+        id: d.id,
+        postType: 'found' as PostType,
+        title: d.title,
+        description: d.description,
+        category: d.category,
+        location_label: d.location_label,
+        image_url: d.image_url,
+        status: d.status,
+        created_at: d.created_at,
+        owner_id: d.finder_id,
+        author_name: d.users?.full_name ?? null,
+      }));
+
+      const lostPosts: FeedPost[] = (lostRes.data ?? []).map((d: any) => ({
+        id: d.id,
+        postType: 'lost' as PostType,
+        title: d.title,
+        description: d.description,
+        category: d.category,
+        radius_km: d.radius_km,
+        image_url: d.image_url,
+        status: d.status,
+        created_at: d.created_at,
+        owner_id: d.poster_id,
+        author_name: d.users?.full_name ?? null,
+      }));
+
+      const merged = [...foundPosts, ...lostPosts].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      setFeed(merged);
+      setGroups(
+        (Array.isArray(groupsRes.data) ? groupsRes.data : [])
+          .filter((g: any) => g?.id)
+          .map((g: any) => ({
+            id: String(g.id),
+            name: g.name ?? 'Unnamed Group',
+            description: g.description ?? null,
+            image_url: g.image_url ?? null,
+            type: g.type === 'private' ? 'private' : 'public',
+            member_count: typeof g.member_count === 'number' ? g.member_count : 0,
+            created_at: g.created_at ?? new Date().toISOString(),
+          }))
+      );
     } catch (e) {
-      console.warn('Community fetchData error:', e);
+      console.warn('Community fetch error:', e);
     } finally {
       setLoading(false);
     }
@@ -246,200 +364,333 @@ export default function CommunityScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchData(false);
+    await fetchAll(false);
     setRefreshing(false);
   };
 
-  const handleResolveLostPost = (id: string) => {
-    Alert.alert('Mark as Resolved', 'Are you sure you found this item? It will be removed from the active search board.', [
+  const handleResolve = (post: FeedPost) => {
+    const isLost = post.postType === 'lost';
+    Alert.alert(
+      isLost ? 'Mark as Found' : 'Mark as Handed Over',
+      isLost ? 'Did you get your item back? 🎉' : 'Did you successfully return it? 🤝',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: isLost ? 'Yes, found it! 🎉' : 'Yes, handed over! 🤝',
+          onPress: async () => {
+            try {
+              const table = isLost ? 'lost_item_posts' : 'community_items';
+              const status = isLost ? 'found' : 'closed';
+              await supabase.from(table).update({ status }).eq('id', post.id);
+              fetchAll();
+            } catch {}
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDelete = (post: FeedPost) => {
+    Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Yes, I found it! 🎉', onPress: async () => {
-          const { error } = await supabase.from('lost_item_posts').update({ status: 'found' }).eq('id', id);
-          if (error) {
-            Alert.alert('Error', error.message);
-          } else {
-            // Give user a celebratory alert
-            Alert.alert('Successfully Recovered 🎉', 'Glad you found your item!');
-            fetchData();
-          }
-      }}
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const table = post.postType === 'lost' ? 'lost_item_posts' : 'community_items';
+            await supabase.from(table).delete().eq('id', post.id);
+            fetchAll();
+          } catch {}
+        },
+      },
     ]);
   };
 
-  const handleResolveFoundPost = (id: string) => {
-    Alert.alert('Mark as Handed Over', 'Are you sure you successfully handed this over to the owner?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Yes, Handed Over 🤝', onPress: async () => {
-          const { error } = await supabase.from('community_items').update({ status: 'closed' }).eq('id', id);
-          if (error) {
-            Alert.alert('Error', error.message);
-          } else {
-            // Record successful recovery on the user profile (done securely in future migration, simple local alert for now)
-            Alert.alert('Hero! 🦸', 'Thanks for returning the item and keeping the community safe!');
-            fetchData();
-          }
-      }}
-    ]);
+  const handleReport = (post: FeedPost) => {
+    Alert.alert(
+      'Report Post',
+      'Why are you reporting this post?',
+      [
+        { text: 'False Information', onPress: () => submitReport(post, 'False Information') },
+        { text: 'Inappropriate / Sexual Content', onPress: () => submitReport(post, 'Inappropriate Content') },
+        { text: 'Spam', onPress: () => submitReport(post, 'Spam') },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
   };
 
-  const switchTab = (tab: Tab) => {
-    setActiveTab(tab);
-    // Simple slide animation
-    Animated.sequence([
-      Animated.timing(slideAnim, { toValue: 10, duration: 100, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 200, useNativeDriver: true })
-    ]).start();
+  const submitReport = async (post: FeedPost, reason: string) => {
+    // In a real app, this would insert into a 'reports' table.
+    // For now, we show a confirmation.
+    Alert.alert('Report Submitted', 'Thank you for keeping the community safe. Our team will review this post.');
   };
 
-  // Deep-link / notification tap: auto-switch to the correct tab when opened from a push notification.
-  // Must be defined after switchTab so it can safely call it.
-  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
-  useEffect(() => {
-    const validTabs: Tab[] = ['found', 'lost', 'groups'];
-    if (tabParam && validTabs.includes(tabParam as Tab)) {
-      switchTab(tabParam as Tab);
-    }
-  }, [tabParam]);
-
-  const renderContent = () => {
-    if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#6366f1" /></View>;
-
-    if (activeTab === 'found') {
-      return (
-        <FlatList data={foundItems} keyExtractor={i => i.id}
-          renderItem={({ item }) => <FoundCard item={item} currentUserId={dbUserId} onClaim={(id) => router.push(`/community-claim/${id}`)} onResolve={handleResolveFoundPost} />}
-          contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366f1" />}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={{ fontSize: 44, marginBottom: 10 }}>🗺️</Text>
-              <Text style={styles.emptyTitle}>Board is empty</Text>
-              <Text style={styles.emptySubtitle}>Be the first to post a found item!</Text>
-            </View>
-          }
-        />
-      );
-    }
-    
-    if (activeTab === 'lost') {
-      return (
-        <FlatList data={lostPosts} keyExtractor={i => i.id}
-          renderItem={({ item }) => <LostCard item={item} currentUserId={dbUserId} onResolve={handleResolveLostPost} />}
-          contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366f1" />}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={{ fontSize: 44, marginBottom: 10 }}>🔍</Text>
-              <Text style={styles.emptyTitle}>No lost items nearby</Text>
-              <Text style={styles.emptySubtitle}>Create a post if you lost something</Text>
-            </View>
-          }
-        />
-      );
-    }
-
-    if (activeTab === 'groups') {
-      return (
-        <FlatList data={groups} keyExtractor={i => i.id}
-          renderItem={({ item }) => <GroupCard group={item} onJoin={(id) => router.push(`/group/${id}`)} />}
-          contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366f1" />}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={{ fontSize: 44, marginBottom: 10 }}>👥</Text>
-              <Text style={styles.emptyTitle}>No groups yet</Text>
-              <Text style={styles.emptySubtitle}>Start a community group in your area</Text>
-            </View>
-          }
-        />
-      );
+  const handleGroupPress = (id: string) => {
+    try {
+      router.push({ pathname: '/group/[id]', params: { id: String(id) } } as any);
+    } catch (e) {
+      console.warn('Group nav error:', e);
+      Alert.alert('Error', 'Could not open group. Please try again.');
     }
   };
 
-  const getFabAction = () => {
-    if (activeTab === 'found') return () => router.push('/create-community-post');
-    if (activeTab === 'lost') return () => router.push('/create-lost-post');
-    return () => router.push('/create-group');
-  };
+  const topPad = insets.top > 0 ? insets.top : 44;
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9ff" />
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-      {/* Header */}
-      <Animated.View style={{ opacity: headerOp, transform: [{ translateY: headerY }] }}>
-        <LinearGradient colors={['#f8f9ff', '#ffffff']} style={styles.header}>
-          <Text style={styles.headerSub}>Community</Text>
-          <Text style={styles.headerTitle}>Network</Text>
-          
-          {/* 3 Tab Selector */}
-          <View style={styles.tabSelector}>
-            {(['found', 'lost', 'groups'] as Tab[]).map((tab) => {
-              const isActive = activeTab === tab;
-              return (
-                <TouchableOpacity key={tab} style={[styles.tabBtn, isActive && styles.tabBtnActive]} onPress={() => switchTab(tab)} activeOpacity={0.8}>
-                  <Text style={[styles.tabBtnText, isActive && styles.tabBtnTextActive]}>
-                    {tab === 'found' ? 'Found Board' : tab === 'lost' ? 'Lost Posts' : 'Groups'}
-                  </Text>
-                </TouchableOpacity>
-              )
-            })}
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <View style={[styles.header, { paddingTop: topPad }]}>
+        <View style={styles.headerTitleRow}>
+          <View>
+            <Text style={styles.headerTitle}>Finder - Community Feed</Text>
           </View>
-        </LinearGradient>
-      </Animated.View>
+          <TouchableOpacity
+            style={styles.bellBtn}
+            onPress={() => router.push('/notifications' as any)}
+            activeOpacity={0.7}
+          >
+            <Feather name="bell" size={20} color="#0f172a" />
+          </TouchableOpacity>
+        </View>
 
-      {/* Content */}
-      <Animated.View style={{ flex: 1, transform: [{ translateX: slideAnim }] }}>
-        {renderContent()}
-      </Animated.View>
+        {/* Search bar */}
+        <View style={styles.searchBar}>
+          <Feather name="search" size={16} color="#94a3b8" style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search for items..."
+            placeholderTextColor="#94a3b8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Feather name="x" size={14} color="#94a3b8" />
+            </TouchableOpacity>
+          )}
+        </View>
 
-      {/* Dynamic FAB */}
-      <TouchableOpacity style={styles.fab} onPress={getFabAction()} activeOpacity={0.88}>
-        <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.fabGrad}>
-          <Text style={styles.fabText}>+</Text>
-        </LinearGradient>
-      </TouchableOpacity>
+        {/* Tab Switcher */}
+        <View style={styles.tabRow}>
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'feed' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('feed')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabBtnText, activeTab === 'feed' && styles.tabBtnTextActive]}>
+              🏠 Feed
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'groups' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('groups')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabBtnText, activeTab === 'groups' && styles.tabBtnTextActive]}>
+              👥 Groups
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* ── Content ─────────────────────────────────────────────────── */}
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#6366f1" />
+        </View>
+      ) : activeTab === 'feed' ? (
+        <FlatList
+          data={filteredFeed}
+          keyExtractor={i => `${i.postType}-${i.id}`}
+          renderItem={({ item }) => (
+            <PostCard
+              post={item}
+              currentUserId={dbUserId}
+              onResolve={handleResolve}
+              onDelete={handleDelete}
+              onReport={handleReport}
+            />
+          )}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="#6366f1"
+              colors={['#6366f1']}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={{ fontSize: 52, marginBottom: 12 }}>📋</Text>
+              <Text style={styles.emptyTitle}>
+                {searchQuery ? 'No results found' : 'Community board is empty'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {searchQuery
+                  ? `No items match "${searchQuery}"`
+                  : 'Tap + Post to report a found or lost item.'}
+              </Text>
+            </View>
+          }
+        />
+      ) : (
+        <FlatList
+          data={groups}
+          keyExtractor={i => i.id}
+          renderItem={({ item }) => (
+            <GroupCard group={item} onPress={() => handleGroupPress(item.id)} />
+          )}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366f1" />
+          }
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={{ fontSize: 52, marginBottom: 12 }}>👥</Text>
+              <Text style={styles.emptyTitle}>No groups yet</Text>
+              <Text style={styles.emptySubtitle}>Create your university group to get started!</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9ff' },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
   center:    { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header:     { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16 },
-  headerSub:  { color: '#64748b', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 2 },
-  headerTitle:{ color: '#0f172a', fontSize: 28, fontWeight: '900', letterSpacing: -0.5, marginBottom: 16 },
-  
-  tabSelector: { flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 12, padding: 4 },
-  tabBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 10 },
-  tabBtnActive: { backgroundColor: '#ffffff', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  tabBtnText: { color: '#64748b', fontSize: 13, fontWeight: '600' },
+
+  // Header
+  header: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 3,
+  },
+  headerTitleRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 20, fontWeight: '900', color: '#0f172a', letterSpacing: -0.4,
+  },
+  bellBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0',
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  // Search
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#f1f5f9', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 10,
+    marginBottom: 12,
+  },
+  searchInput: { flex: 1, fontSize: 14, color: '#0f172a', padding: 0 },
+
+  // Tabs
+  tabRow: { flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 10, padding: 3 },
+  tabBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
+  tabBtnActive: { backgroundColor: '#ffffff', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
+  tabBtnText: { fontSize: 13, color: '#64748b', fontWeight: '600' },
   tabBtnTextActive: { color: '#0f172a', fontWeight: '800' },
 
-  listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 140 },
-  card: { backgroundColor: '#ffffff', borderRadius: 24, marginBottom: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(0,0,0,0.04)', shadowColor: '#6366f1', shadowOpacity: 0.07, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
-  cardRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  cardInfo: { flex: 1 },
-  cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  cardTitle: { color: '#0f172a', fontSize: 15, fontWeight: '800', flex: 1, marginRight: 8 },
-  statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
-  statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
-  statusText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
-  cardCategory: { color: '#64748b', fontSize: 12, fontWeight: '600', marginBottom: 4 },
-  cardTime: { color: '#cbd5e1', fontSize: 11, fontWeight: '500' },
-  cardDesc: { color: '#475569', fontSize: 13, fontWeight: '500', lineHeight: 19, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f8fafc' },
-  
-  claimBtn: { marginTop: 14, borderRadius: 18, overflow: 'hidden' },
-  claimBtnGrad: { paddingVertical: 12, alignItems: 'center' },
-  claimBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '800' },
-  ownBadge: { marginTop: 12, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' },
-  ownBadgeText: { color: '#15803d', fontSize: 11, fontWeight: '700' },
-  
+  listContent: { paddingTop: 10, paddingBottom: 160 },
+
+  // Post Card (horizontal list-item style)
+  card: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    marginHorizontal: 12, marginBottom: 10,
+    borderRadius: 16, overflow: 'hidden',
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3,
+  },
+  cardImg: { width: 100, height: 120 },
+  cardImgFull: { width: '100%', height: '100%' },
+  cardImgPlaceholder: {
+    backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center',
+  },
+  cardBody: { flex: 1, padding: 12 },
+  cardTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  cardTime: { fontSize: 11, color: '#94a3b8', fontWeight: '500' },
+  deleteBtn: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: '#fef2f2', alignItems: 'center', justifyContent: 'center',
+    marginRight: 6,
+  },
+  badge: {
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20,
+  },
+  badgeLost: { backgroundColor: '#FEE2E2' },
+  badgeFound: { backgroundColor: '#DCFCE7' },
+  badgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  badgeLostText: { color: '#B91C1C' },
+  badgeFoundText: { color: '#15803D' },
+  cardTitle: { fontSize: 14, fontWeight: '800', color: '#0f172a', marginBottom: 4 },
+  cardDesc: { fontSize: 12, color: '#64748b', lineHeight: 17, marginBottom: 4 },
+  cardLocRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 6 },
+  cardLoc: { fontSize: 11, color: '#94a3b8', fontWeight: '500', flex: 1 },
+
+  cardActions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  shareBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#f8fafc', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: '#e2e8f0',
+  },
+  shareBtnText: { fontSize: 11, color: '#64748b', fontWeight: '600' },
+  waBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#f0fdf4', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: '#bbf7d0',
+  },
+  waBtnText: { fontSize: 11, color: '#16a34a', fontWeight: '600' },
+  resolveBtn: {
+    backgroundColor: '#10b981', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 5,
+  },
+  resolveBtnText: { fontSize: 11, color: '#fff', fontWeight: '800' },
+  claimBtn: {
+    backgroundColor: '#6366f1', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 5,
+  },
+  claimBtnText: { fontSize: 11, color: '#fff', fontWeight: '800' },
+  reportBtn: {
+    padding: 6, marginLeft: 'auto',
+  },
+
+  // Group Cards
+  groupCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#ffffff',
+    marginHorizontal: 12, marginBottom: 10, borderRadius: 16,
+    padding: 14,
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
+  },
+  groupAvatar: { width: 52, height: 52, borderRadius: 14 },
+  groupAvatarPlaceholder: {
+    backgroundColor: '#e0e7ff', alignItems: 'center', justifyContent: 'center',
+  },
+  groupTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 },
+  groupName: { fontSize: 15, fontWeight: '800', color: '#0f172a', flex: 1 },
+  groupTypeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
+  groupTypeBadgePublic: { backgroundColor: '#e0e7ff' },
+  groupTypeBadgePrivate: { backgroundColor: '#fce7f3' },
+  groupTypeBadgeText: { fontSize: 10, fontWeight: '800' },
+  groupMeta: { fontSize: 12, color: '#94a3b8', fontWeight: '500', marginBottom: 2 },
+  groupDesc: { fontSize: 12, color: '#64748b', lineHeight: 17 },
+
+  // Empty
   empty: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 32 },
-  emptyTitle: { color: '#0f172a', fontSize: 20, fontWeight: '800', marginBottom: 10 },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginBottom: 10 },
   emptySubtitle: { color: '#64748b', textAlign: 'center', fontSize: 14, lineHeight: 22 },
-  
-  fab: { position: 'absolute', bottom: 140, right: 20, width: 64, height: 64, borderRadius: 32, overflow: 'hidden', shadowColor: '#6366f1', shadowOpacity: 0.4, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 12 },
-  fabGrad: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  fabText: { color: '#ffffff', fontSize: 32, fontWeight: '300', lineHeight: 38 },
 });

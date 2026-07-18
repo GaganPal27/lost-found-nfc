@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, Alert, Animated,
   StatusBar, ScrollView, StyleSheet,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import * as Location from 'expo-location';
@@ -147,9 +148,11 @@ export default function RegistrationScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={20}
       >
         {/* Back Button */}
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
@@ -373,7 +376,7 @@ export default function RegistrationScreen() {
             </Text>
           </TouchableOpacity>
         </Animated.View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

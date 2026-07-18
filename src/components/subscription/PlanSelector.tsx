@@ -13,19 +13,11 @@ const PLANS = [
   },
   {
     id: 'pro' as SubscriptionTier,
-    name: 'Pro',
-    price: '$4.99',
-    oneLiner: 'For the frequent traveller',
-    badges: ['15 items', 'BLE only', '30-day history', 'Passive tracking'],
+    name: 'Premium',
+    price: '$2.99',
+    oneLiner: 'NFC stickers & unlimited protection',
+    badges: ['Unlimited items', 'NFC Stickers', '30-day history'],
     isPopular: true,
-  },
-  {
-    id: 'max' as SubscriptionTier,
-    name: 'Max',
-    price: '$9.99',
-    oneLiner: 'Ultimate protection',
-    badges: ['Unlimited items', 'NFC + BLE', '90-day history', 'Live location'],
-    isPopular: false,
   },
 ];
 

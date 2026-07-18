@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, RefreshControl, Platform, UIManager, LayoutAnimation, StatusBar, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
-import { supabase } from '../../lib/supabase';
-import { useAuthStore } from '../../stores/authStore';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/authStore';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
@@ -10,7 +10,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function NotificationsScreen() {
+export function NotificationsList() {
   const { user, dbUser } = useAuthStore();
   const router = useRouter();
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -96,29 +96,7 @@ export default function NotificationsScreen() {
   return (
     <View className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" />
-      {/* Header */}
-      <View className="px-6 pt-14 pb-5 border-b border-slate-200">
-        <View className="flex-row justify-between items-center">
-          <View>
-            <Text className="text-slate-500 text-xs uppercase tracking-widest mb-1 font-bold">Alerts</Text>
-            <View className="flex-row items-center">
-              <Text className="text-slate-900 text-3xl font-black mr-3">Activity</Text>
-              {unreadCount > 0 && (
-                <View className="bg-primary w-6 h-6 rounded-full items-center justify-center shadow-sm">
-                  <Text className="text-white text-xs font-bold">{unreadCount}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-          <TouchableOpacity
-            onPress={() => router.push('/profile')}
-            className="w-11 h-11 bg-white border border-slate-200 shadow-sm rounded-full items-center justify-center"
-            activeOpacity={0.7}
-          >
-            <Text className="text-slate-700 font-bold">{user?.email?.[0]?.toUpperCase() || 'U'}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      {/* Header removed for unified wrapper */}
 
       <Animated.View style={{ opacity: fadeIn, flex: 1 }}>
         <FlatList

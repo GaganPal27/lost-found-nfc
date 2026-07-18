@@ -12,8 +12,7 @@ import Purchases from 'react-native-purchases';
 
 const PLAN_PERKS = {
   basic:  { price: 'Free', color: 'text-slate-500', desc: 'Perfect for getting started' },
-  pro:    { price: '$4.99/mo', color: 'text-blue-600', desc: 'For the frequent traveller' },
-  max:    { price: '$9.99/mo', color: 'text-red-600', desc: 'Ultimate protection' },
+  pro:    { price: '$2.99/mo', color: 'text-blue-600', desc: 'NFC Premium Features' },
 };
 
 export default function SubscriptionScreen() {
@@ -99,17 +98,14 @@ export default function SubscriptionScreen() {
         <View className="bg-white border border-slate-200 rounded-3xl p-5 mt-6 shadow-sm">
           <Text className="text-slate-500 text-xs uppercase tracking-wider mb-4 font-bold">What's included</Text>
           {[
-            { feature: 'Items protected', basic: '5', pro: '15', max: '∞' },
-            { feature: 'Tag types', basic: 'NFC', pro: 'BLE', max: 'All types' },
-            { feature: 'Scan history', basic: '7 days', pro: '30 days', max: '90 days' },
-            { feature: 'Passive BLE tracking', basic: '✕', pro: '✓', max: '✓' },
-            { feature: 'Live location share', basic: '✕', pro: '✕', max: '✓' },
+            { feature: 'Items protected', basic: '5', pro: 'Unlimited' },
+            { feature: 'Tag types', basic: 'Digital only', pro: 'NFC Stickers' },
+            { feature: 'Scan history', basic: '7 days', pro: '30 days' },
           ].map((row, i) => (
-            <View key={i} className={`flex-row items-center py-3 ${i !== 4 ? 'border-b border-slate-100' : ''}`}>
+            <View key={i} className={`flex-row items-center py-3 ${i !== 2 ? 'border-b border-slate-100' : ''}`}>
               <Text className="text-slate-600 text-sm flex-1 font-medium">{row.feature}</Text>
               <Text className={`text-xs font-bold w-16 text-center ${selectedTier === 'basic' ? 'text-slate-900' : 'text-slate-400'}`}>{row.basic}</Text>
               <Text className={`text-xs font-bold w-16 text-center ${selectedTier === 'pro' ? 'text-blue-600' : 'text-slate-400'}`}>{row.pro}</Text>
-              <Text className={`text-xs font-bold w-16 text-center ${selectedTier === 'max' ? 'text-red-600' : 'text-slate-400'}`}>{row.max}</Text>
             </View>
           ))}
         </View>

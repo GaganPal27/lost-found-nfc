@@ -196,52 +196,7 @@ export default function ItemDetailScreen() {
           )}
         </View>
 
-        {/* Passive Tracking Map */}
-        <View className="mb-5">
-          <Text className="text-slate-900 text-base font-bold mb-3">Passive Tracking Map</Text>
-          <EntitlementGate requiredTier="pro" featureName="Passive Tracking Map">
-            {hasLocation ? (
-              <TouchableOpacity
-                onPress={openInMaps}
-                activeOpacity={0.85}
-                className="w-full bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm"
-              >
-                {/* Map preview header with gradient feel */}
-                <View className="bg-slate-100 items-center py-6 px-4">
-                  <Text className="text-5xl mb-3">🗺️</Text>
-                  <Text className="text-slate-900 font-bold text-lg mb-1">Last Known Location</Text>
-
-                  {/* Address (human-readable) */}
-                  {locationAddress ? (
-                    <Text className="text-primary text-sm text-center leading-5 mb-1" numberOfLines={2}>
-                      📍 {locationAddress}
-                    </Text>
-                  ) : (
-                    <Text className="text-primary font-mono text-sm mt-1 font-bold">
-                      {item.last_seen_lat.toFixed(4)}°N, {item.last_seen_lng.toFixed(4)}°E
-                    </Text>
-                  )}
-
-                  <Text className="text-slate-500 text-xs mt-1 font-medium">
-                    {new Date(item.last_seen_at).toLocaleString('en-IN', {
-                      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-                    })}
-                  </Text>
-                </View>
-
-                {/* Tap-to-open footer */}
-                <View className="bg-primary/10 border-t border-primary/20 flex-row items-center justify-center py-3">
-                  <Text className="text-primary font-bold text-sm">Open in Maps →</Text>
-                </View>
-              </TouchableOpacity>
-            ) : (
-              <View className="w-full h-32 bg-slate-50 border border-dashed border-slate-300 rounded-3xl items-center justify-center shadow-sm">
-                <Text className="text-slate-500 font-bold">No location data yet</Text>
-                <Text className="text-slate-400 text-xs mt-1 font-medium">Data appears after a BLE sighting</Text>
-              </View>
-            )}
-          </EntitlementGate>
-        </View>
+        {/* Removed Passive Tracking Map for now */}
 
         {/* NFC Scan History */}
         <Text className="text-slate-900 text-base font-bold mb-3">NFC Scan History</Text>

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, Animated, StatusBar, ScrollView } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 
@@ -36,9 +37,11 @@ export default function ForgotPasswordScreen() {
   return (
     <View className="flex-1 bg-darkBg">
       <StatusBar barStyle="light-content" />
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 }}
         keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={20}
       >
         {/* Back */}
         <TouchableOpacity onPress={() => router.back()} className="mb-8 flex-row items-center" activeOpacity={0.7}>
@@ -149,7 +152,7 @@ export default function ForgotPasswordScreen() {
             </View>
           )}
         </Animated.View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

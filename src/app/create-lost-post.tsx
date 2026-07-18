@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, Animated, StyleSheet, KeyboardAvoidingView, Platform, Modal
+  View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator,
+  Animated, StyleSheet, Modal, Image, StatusBar, Platform,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
+import { decode } from 'base64-arraybuffer';
 import { updateUserLocation } from '../lib/location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -19,12 +22,53 @@ export default function CreateLostPostScreen() {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [description, setDescription] = useState('');
   const [radiusKm, setRadiusKm] = useState(5);
-  
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [location, setLocation] = useState<any>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
+
+  const pickImage = async () => {
+    Alert.alert('Add Photo', 'Choose a source', [
+      { text: 'Camera', onPress: () => launchPicker('camera') },
+      { text: 'Gallery', onPress: () => launchPicker('gallery') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const launchPicker = async (source: 'camera' | 'gallery') => {
+    if (source === 'camera') {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') { Alert.alert('Permission Required', 'Camera access is needed.'); return; }
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') { Alert.alert('Permission Required', 'Photo library access is needed.'); return; }
+    }
+    const result = source === 'camera'
+      ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [4, 3], quality: 0.75, base64: true })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.75, base64: true });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+      if (asset.base64 && user?.id) {
+        setUploadingImage(true);
+        try {
+          const ext = asset.uri.split('.').pop() || 'jpg';
+          const path = `lost-posts/${user.id}/${Date.now()}.${ext}`;
+          const { data, error } = await supabase.storage
+            .from('item-images')
+            .upload(path, decode(asset.base64), { contentType: `image/${ext}`, upsert: true });
+          if (!error && data) {
+            const { data: urlData } = supabase.storage.from('item-images').getPublicUrl(data.path);
+            if (urlData?.publicUrl) setImageUri(urlData.publicUrl);
+          }
+        } finally { setUploadingImage(false); }
+      }
+    }
+  };
+
 
   // Error shake animation
   const shakeAnim = useState(new Animated.Value(0))[0];
@@ -114,13 +158,14 @@ export default function CreateLostPostScreen() {
 
       // Insert post
       const { data, error } = await supabase.from('lost_item_posts').insert({
-        poster_id: dbUserId, // ✅ real users.id, not auth UID
+        poster_id: dbUserId,
         title: title.trim(),
         category,
         description: description.trim(),
         last_seen_lat: location.coords.latitude,
         last_seen_lng: location.coords.longitude,
         radius_km: radiusKm,
+        image_url: imageUri,
         status: 'searching'
       }).select().single();
 
@@ -143,11 +188,20 @@ export default function CreateLostPostScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20 }]}>
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#f8f9ff" />
+      <KeyboardAwareScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 120 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        enableOnAndroid
+        enableAutomaticScroll
+        extraScrollHeight={Platform.OS === 'ios' ? 20 : 80}
+      >
         <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
           
           <Text style={styles.headerTitle}>Report Lost Item</Text>
@@ -183,6 +237,29 @@ export default function CreateLostPostScreen() {
               numberOfLines={4}
               textAlignVertical="top"
             />
+
+            {/* Photo */}
+            <Text style={styles.label}>Photo (optional)</Text>
+            <TouchableOpacity onPress={pickImage} style={styles.photoBox} activeOpacity={0.8}>
+              {imageUri ? (
+                <>
+                  <Image source={{ uri: imageUri }} style={styles.photoPreview} />
+                  {uploadingImage && (
+                    <View style={styles.photoOverlay}>
+                      <ActivityIndicator color="#fff" />
+                      <Text style={{ color: '#fff', marginTop: 4, fontSize: 12 }}>Uploading…</Text>
+                    </View>
+                  )}
+                  <Text style={styles.changePhoto}>📷 Change Photo</Text>
+                </>
+              ) : (
+                <View style={styles.photoPlaceholder}>
+                  <Text style={{ fontSize: 30, marginBottom: 6 }}>📷</Text>
+                  <Text style={styles.photoLabel}>Tap to add a photo</Text>
+                  <Text style={styles.photoHint}>Camera or Gallery</Text>
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
 
           <View style={styles.card}>
@@ -234,7 +311,7 @@ export default function CreateLostPostScreen() {
             )}
           </TouchableOpacity>
         </Animated.View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
       {/* Custom Picker Modal */}
       <Modal visible={showPicker} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -252,13 +329,16 @@ export default function CreateLostPostScreen() {
         </View>
       </Modal>
 
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
+const TAB_BAR_CLEARANCE = 72;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9ff' },
-  scroll: { padding: 20, paddingBottom: 140 },
+  scrollView: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingBottom: TAB_BAR_CLEARANCE },
   headerTitle: { fontSize: 28, fontWeight: '900', color: '#0f172a', marginBottom: 4 },
   headerSubtitle: { fontSize: 14, color: '#64748b', marginBottom: 24 },
   
@@ -324,5 +404,23 @@ const styles = StyleSheet.create({
   modalItem: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   modalItemText: { fontSize: 16, color: '#475569' },
   modalCancel: { marginTop: 20, alignItems: 'center', paddingVertical: 10 },
-  modalCancelText: { color: '#ef4444', fontWeight: 'bold', fontSize: 16 }
+  modalCancelText: { color: '#ef4444', fontWeight: 'bold', fontSize: 16 },
+
+  // Photo picker
+  photoBox: {
+    borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14,
+    overflow: 'hidden', backgroundColor: '#f8fafc', marginBottom: 20, minHeight: 140,
+  },
+  photoPreview: { width: '100%', height: 180, resizeMode: 'cover' },
+  photoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center',
+  },
+  changePhoto: {
+    textAlign: 'center', paddingVertical: 8,
+    color: '#6366f1', fontWeight: '700', fontSize: 13, backgroundColor: '#f0f0ff',
+  },
+  photoPlaceholder: { alignItems: 'center', justifyContent: 'center', paddingVertical: 30 },
+  photoLabel: { color: '#475569', fontWeight: '700', fontSize: 14, marginBottom: 4 },
+  photoHint: { color: '#94a3b8', fontSize: 12 },
 });

@@ -14,10 +14,9 @@ export default function TabsLayout() {
           tabBarStyle: { display: 'none' },   // hide native tab bar entirely
         }}
       >
-        <Tabs.Screen name="my-items" options={{ tabBarButton: () => null }} />
-        <Tabs.Screen name="scan" options={{ tabBarButton: () => null }} />
-        <Tabs.Screen name="connect" options={{ tabBarButton: () => null }} />
         <Tabs.Screen name="community" options={{ tabBarButton: () => null }} />
+        <Tabs.Screen name="scan" options={{ tabBarButton: () => null }} />
+        <Tabs.Screen name="my-items" options={{ tabBarButton: () => null }} />
       </Tabs>
     </View>
   );

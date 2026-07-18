@@ -4,8 +4,8 @@ import {
   StatusBar, Animated, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { supabase } from '../../lib/supabase';
-import { useAuthStore } from '../../stores/authStore';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/authStore';
 
 type ConversationRow = {
   id: string;
@@ -23,7 +23,7 @@ type ConversationRow = {
   last_message?: string;
 };
 
-export default function ConnectScreen() {
+export function MessagesList() {
   const { user } = useAuthStore();
   const router = useRouter();
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
@@ -154,16 +154,7 @@ export default function ConnectScreen() {
     <View className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" />
 
-      {/* Header */}
-      <View className="px-6 pt-14 pb-5 border-b border-slate-200">
-        <Text className="text-slate-500 text-xs uppercase tracking-widest mb-1 font-bold">Finder Network</Text>
-        <Text className="text-slate-900 text-3xl font-black">Connect</Text>
-        {conversations.length > 0 && (
-          <Text className="text-slate-500 text-sm mt-1 font-medium">
-            {conversations.filter(c => !c.resolved).length} active contact{conversations.filter(c => !c.resolved).length !== 1 ? 's' : ''}
-          </Text>
-        )}
-      </View>
+      {/* Header removed for unified wrapper */}
 
       {loading && conversations.length === 0 ? (
         <View className="flex-1 items-center justify-center">

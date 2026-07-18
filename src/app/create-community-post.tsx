@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView, Image,
-  Alert, StatusBar, StyleSheet, ActivityIndicator, ActionSheetIOS, Platform,
+  View, Text, TextInput, TouchableOpacity, Image,
+  Alert, StatusBar, StyleSheet, ActivityIndicator, ScrollView,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -11,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CATEGORIES = ['Personal', 'Electronics', 'Bag', 'Keys', 'Wallet', 'Travel', 'Other'];
 
@@ -27,6 +29,7 @@ const CATEGORY_META: Record<string, { icon: string; bg: string }> = {
 export default function CreateCommunityPostScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const insets = useSafeAreaInsets();
 
   const [title, setTitle]               = useState('');
   const [category, setCategory]         = useState('Other');
@@ -53,45 +56,26 @@ export default function CreateCommunityPostScreen() {
       });
   }, [user]);
 
-  // ── Image picker (camera + gallery) ─────────────────────────────────────────
+  // ── Image picker ─────────────────────────────────────────────────────
   const pickImage = async () => {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: ['Cancel', 'Take Photo', 'Choose from Library'], cancelButtonIndex: 0 },
-        async (buttonIndex) => {
-          if (buttonIndex === 1) await launchPicker('camera');
-          if (buttonIndex === 2) await launchPicker('gallery');
-        }
-      );
-    } else {
-      // Android: simple Alert
-      Alert.alert('Add Photo', 'Choose a source', [
-        { text: 'Camera',  onPress: () => launchPicker('camera') },
-        { text: 'Gallery', onPress: () => launchPicker('gallery') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-    }
+    Alert.alert('Add Photo', 'Choose a source', [
+      { text: 'Camera',  onPress: () => launchPicker('camera') },
+      { text: 'Gallery', onPress: () => launchPicker('gallery') },
+      { text: 'Cancel',  style: 'cancel' },
+    ]);
   };
 
   const launchPicker = async (source: 'camera' | 'gallery') => {
     if (source === 'camera') {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
-        return;
-      }
+      if (status !== 'granted') { Alert.alert('Permission Required', 'Camera access is needed.'); return; }
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Photo library access is needed to pick an image.');
-        return;
-      }
+      if (status !== 'granted') { Alert.alert('Permission Required', 'Photo library access is needed.'); return; }
     }
-
     const result = source === 'camera'
       ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [4, 3], quality: 0.75, base64: true })
       : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.75, base64: true });
-
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       setImageUri(asset.uri);
@@ -194,10 +178,17 @@ export default function CreateCommunityPostScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#f8f9ff" />
-      <ScrollView
-        contentContainerStyle={styles.scroll}
+      <KeyboardAwareScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 48 },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        enableOnAndroid
+        enableAutomaticScroll
+        extraScrollHeight={20}
       >
         {/* Back */}
         <TouchableOpacity onPress={() => router.back()} style={styles.back} activeOpacity={0.7}>
@@ -209,12 +200,8 @@ export default function CreateCommunityPostScreen() {
         <Text style={styles.pageTitle}>Post a Found Item</Text>
         <Text style={styles.pageHint}>Found something without a tag? Post it here so the owner can find it.</Text>
 
-        {/* ── Photo picker ──────────────────────────────────────────────────── */}
-        <TouchableOpacity
-          onPress={pickImage}
-          style={styles.photoBox}
-          activeOpacity={0.8}
-        >
+        {/* ── Photo picker ─────────────────────────────────────────────── */}
+        <TouchableOpacity onPress={pickImage} style={styles.photoBox} activeOpacity={0.8}>
           {imageUri ? (
             <>
               <Image source={{ uri: imageUri }} style={styles.photoImage} />
@@ -258,25 +245,23 @@ export default function CreateCommunityPostScreen() {
         {/* ── Category ──────────────────────────────────────────────────────── */}
         <View style={styles.field}>
           <Text style={styles.label}>Category</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.pills}>
-              {CATEGORIES.map(cat => {
-                const m = CATEGORY_META[cat] || CATEGORY_META.Other;
-                const active = category === cat;
-                return (
-                  <TouchableOpacity
-                    key={cat}
-                    onPress={() => setCategory(cat)}
-                    style={[styles.pill, active ? { backgroundColor: m.bg, borderColor: 'rgba(99,102,241,0.2)' } : styles.pillInactive]}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.pillIcon}>{m.icon}</Text>
-                    <Text style={[styles.pillText, active && { color: '#6366f1', fontWeight: '800' }]}>{cat}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </ScrollView>
+          <View style={styles.pills}>
+            {CATEGORIES.map(cat => {
+              const m = CATEGORY_META[cat] || CATEGORY_META.Other;
+              const active = category === cat;
+              return (
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => setCategory(cat)}
+                  style={[styles.pill, active ? { backgroundColor: m.bg, borderColor: 'rgba(99,102,241,0.2)' } : styles.pillInactive]}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.pillIcon}>{m.icon}</Text>
+                  <Text style={[styles.pillText, active && { color: '#6366f1', fontWeight: '800' }]}>{cat}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
         {/* ── Description ───────────────────────────────────────────────────── */}
@@ -329,9 +314,9 @@ export default function CreateCommunityPostScreen() {
 
         {/* ── Submit ────────────────────────────────────────────────────────── */}
         <TouchableOpacity
-          style={[styles.submitBtn, (loading || uploadingImage) && { opacity: 0.6 }]}
+          style={[styles.submitBtn, loading && { opacity: 0.6 }]}
           onPress={handleSubmit}
-          disabled={loading || uploadingImage}
+          disabled={loading}
           activeOpacity={0.85}
         >
           <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.submitGrad}>
@@ -341,14 +326,15 @@ export default function CreateCommunityPostScreen() {
             }
           </LinearGradient>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9ff' },
-  scroll:    { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 160 },
+  scrollView: { flex: 1 },
+  scroll:    { paddingHorizontal: 24, paddingBottom: 48 },
 
   back:       { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
   backArrow:  { color: '#6366f1', fontSize: 20, marginRight: 6 },
@@ -387,7 +373,7 @@ const styles = StyleSheet.create({
   input:    { color: '#0f172a', fontSize: 15, fontWeight: '500', paddingVertical: 14 },
 
   // Category pills
-  pills:       { flexDirection: 'row', gap: 8, paddingBottom: 4 },
+  pills:       { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   pill:        { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 100, borderWidth: 1, backgroundColor: '#ffffff', borderColor: '#e2e8f0' },
   pillInactive:{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' },
   pillIcon:    { fontSize: 14 },

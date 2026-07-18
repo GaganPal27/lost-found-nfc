@@ -172,7 +172,6 @@ export default function ScanScreen() {
 
   const MODES: { key: ScanMode; label: string; icon: string }[] = [
     { key: 'nfc', label: 'NFC', icon: '📱' },
-    { key: 'ble', label: 'BLE', icon: '📡' },
     { key: 'qr',  label: 'QR',  icon: '📸' },
   ];
 

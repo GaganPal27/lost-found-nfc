@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, Animated, StatusBar, ScrollView } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 
@@ -54,9 +55,11 @@ export default function LoginScreen() {
   return (
     <View className="flex-1 bg-darkBg">
       <StatusBar barStyle="dark-content" />
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48 }}
         keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={20}
       >
         {/* Decorative NFC rings */}
         <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
@@ -167,7 +170,7 @@ export default function LoginScreen() {
         <Text className="text-slate-400 text-xs mt-10 text-center font-medium">
           By signing in you agree to our Terms & Privacy Policy
         </Text>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

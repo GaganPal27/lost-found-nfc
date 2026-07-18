@@ -1,4 +1,5 @@
 import 'react-native-url-polyfill/auto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
@@ -9,9 +10,10 @@ let supabase: any;
 if (supabaseUrl && supabaseUrl.startsWith('http')) {
   supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: false,
+      storage: AsyncStorage,       // ← Persist session to device storage
+      persistSession: true,        // ← Keep session across app restarts
+      autoRefreshToken: true,      // ← Refresh tokens automatically
+      detectSessionInUrl: false,   // ← Disable URL-based session detection (mobile only)
     },
   });
 } else {

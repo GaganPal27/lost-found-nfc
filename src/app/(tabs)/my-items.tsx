@@ -16,11 +16,8 @@ export default function MyItemsScreen() {
   const { items, itemsCount, fetchMyItems, subscribeToItems, unsubscribeFromItems } = useItemStore();
   const { tier } = useSubscriptionStore();
   const [refreshing, setRefreshing] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-
   const headerY = useRef(new Animated.Value(-20)).current;
   const headerOp = useRef(new Animated.Value(0)).current;
-  const bellWiggle = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -31,47 +28,7 @@ export default function MyItemsScreen() {
     return () => unsubscribeFromItems();
   }, [user]);
 
-  // Fetch unread notification count
-  useEffect(() => {
-    if (!user?.id) return;
-    const fetchCount = async () => {
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
-      setUnreadCount(count ?? 0);
-    };
-    fetchCount();
-
-    const sub = supabase
-      .channel('myitems-notif-badge')
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'notifications',
-        filter: `user_id=eq.${user.id}`,
-      }, fetchCount)
-      .subscribe();
-
-    return () => { supabase.removeChannel(sub); };
-  }, [user?.id]);
-
-  // Wiggle bell when new unread arrives
-  useEffect(() => {
-    if (unreadCount > 0) {
-      Animated.sequence([
-        Animated.timing(bellWiggle, { toValue: 1, duration: 100, useNativeDriver: true }),
-        Animated.timing(bellWiggle, { toValue: -1, duration: 100, useNativeDriver: true }),
-        Animated.timing(bellWiggle, { toValue: 1, duration: 100, useNativeDriver: true }),
-        Animated.timing(bellWiggle, { toValue: -1, duration: 100, useNativeDriver: true }),
-        Animated.timing(bellWiggle, { toValue: 0, duration: 100, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [unreadCount]);
-
-  const bellRotate = bellWiggle.interpolate({
-    inputRange: [-1, 0, 1],
-    outputRange: ['-15deg', '0deg', '15deg'],
-  });
+  // Notification logic removed
 
   const limit = PLAN_LIMITS[tier as keyof typeof PLAN_LIMITS].maxItems;
   const isAtLimit = itemsCount >= limit;
@@ -97,25 +54,15 @@ export default function MyItemsScreen() {
               <Text style={styles.headerTitle}>My Items</Text>
             </View>
 
-            {/* Bell icon — notification shortcut */}
+            {/* Settings icon */}
             <TouchableOpacity
-              onPress={() => router.push('/(tabs)/notifications')}
+              onPress={() => router.push('/profile')}
               style={styles.bellBtn}
               activeOpacity={0.8}
             >
-              <Animated.View style={{ transform: [{ rotate: bellRotate }] }}>
-                <View style={styles.bellIconWrap}>
-                  <Feather name="bell" size={20} color="#6366f1" />
-                </View>
-              </Animated.View>
-              {/* Badge */}
-              {unreadCount > 0 && (
-                <View style={styles.bellBadge}>
-                  <Text style={styles.bellBadgeText}>
-                    {unreadCount > 9 ? '9+' : String(unreadCount)}
-                  </Text>
-                </View>
-              )}
+              <View style={styles.bellIconWrap}>
+                <Feather name="settings" size={20} color="#6366f1" />
+              </View>
             </TouchableOpacity>
           </View>
 
@@ -142,12 +89,7 @@ export default function MyItemsScreen() {
               </View>
             )}
             
-            {tier === 'max' && (
-              <TouchableOpacity onPress={() => router.push('/ble-map')} style={{ marginTop: 12, backgroundColor: '#f1f5f9', paddingVertical: 10, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }} activeOpacity={0.8}>
-                <Text style={{ fontSize: 16, marginRight: 6 }}>🌍</Text>
-                <Text style={{ color: '#0f172a', fontWeight: '700', fontSize: 13 }}>Open Live Tag Map</Text>
-              </TouchableOpacity>
-            )}
+          {/* Live Tag Map removed — coming soon */}
           </View>
         </LinearGradient>
       </Animated.View>
@@ -156,7 +98,7 @@ export default function MyItemsScreen() {
         data={items}
         keyExtractor={i => i.id}
         renderItem={({ item }) => <ItemCard item={item} />}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 140 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); if (user?.id) await fetchMyItems(user.id); setRefreshing(false); }} tintColor="#6366f1" colors={['#6366f1']} />}
         ListEmptyComponent={
           <View style={styles.empty}>

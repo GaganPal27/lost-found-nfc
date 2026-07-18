@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList,
+  View, Text, TextInput, TouchableOpacity, FlatList, ScrollView,
   KeyboardAvoidingView, Platform, StyleSheet, ActivityIndicator, Alert, Image, Share
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,7 +17,8 @@ type Message = {
 };
 
 export default function GroupChatScreen() {
-  const { id } = useLocalSearchParams();
+  const { id: rawId } = useLocalSearchParams();
+  const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const router = useRouter();
   const { user, dbUser } = useAuthStore();
   
@@ -50,7 +51,11 @@ export default function GroupChatScreen() {
 
     // 2. Get my membership — use dbUser.id (users table PK), not user.id (auth UUID)
     const myDbId = dbUser?.id;
-    if (!myDbId) { setLoading(false); return; }
+    if (!myDbId) {
+      setLoading(false);
+      setStatus('none');
+      return;
+    }
 
     const { data: mem } = await supabase.from('group_members')
       .select('*').eq('group_id', id).eq('user_id', myDbId).single();
@@ -258,7 +263,7 @@ export default function GroupChatScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><Text style={styles.backTxt}>←</Text></TouchableOpacity>
         <View style={styles.headerInfo}>
           <Text style={styles.groupName} numberOfLines={1}>{group.name}</Text>
-          <Text style={styles.groupMembers}>{group.member_count} member{group.member_count !== 1 ? 's' : ''}</Text>
+          <Text style={styles.groupMembers}>{group.member_count ?? 0} member{(group.member_count ?? 0) !== 1 ? 's' : ''}</Text>
         </View>
         <TouchableOpacity onPress={() => setShowInvite(true)} style={styles.settingsBtn}>
           <Text style={styles.settingsTxt}>👤+</Text>
