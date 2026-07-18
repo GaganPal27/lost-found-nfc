@@ -2,7 +2,11 @@
   "expo": {
     "name": "lost-found-nfc",
     "slug": "lost-found-nfc",
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "version": "1.0.0",
     "scheme": "lostfoundnfc",
     "orientation": "portrait",
@@ -86,7 +90,16 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Lost & Found to use your location to record where items were tapped or detected."
         }
-      ]
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "lost-found-nfc",
+          "organization": "your-org"
+        }
+      ],
+      "@sentry/react-native"
     ],
     "extra": {
       "router": {},
