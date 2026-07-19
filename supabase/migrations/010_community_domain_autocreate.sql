@@ -122,6 +122,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP POLICY IF EXISTS "community_groups_public_read" ON community_groups;
 DROP POLICY IF EXISTS "official_groups_public_read" ON community_groups;
+DROP POLICY IF EXISTS "community_groups_scoped_read" ON community_groups;
 CREATE POLICY "community_groups_scoped_read" ON community_groups
   FOR SELECT USING (
     is_official = true
@@ -140,6 +141,7 @@ CREATE POLICY "community_groups_scoped_read" ON community_groups
   );
 
 DROP POLICY IF EXISTS "group_members_insert" ON group_members;
+DROP POLICY IF EXISTS "group_members_scoped_insert" ON group_members;
 CREATE POLICY "group_members_scoped_insert" ON group_members
   FOR INSERT WITH CHECK (
     user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
