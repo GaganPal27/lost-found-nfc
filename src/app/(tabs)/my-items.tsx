@@ -52,6 +52,7 @@ export default function MyItemsScreen() {
             <View>
               <Text style={styles.headerSub}>Lost & Found Network</Text>
               <Text style={styles.headerTitle}>My Items</Text>
+              <Text style={{ fontSize: 10, color: 'red', marginTop: 4 }}>DEBUG URL: {process.env.EXPO_PUBLIC_SUPABASE_URL}</Text>
             </View>
 
             {/* Settings icon */}

@@ -15,6 +15,12 @@ if (supabaseUrl && supabaseUrl.startsWith('http')) {
       autoRefreshToken: true,      // ← Refresh tokens automatically
       detectSessionInUrl: false,   // ← Disable URL-based session detection (mobile only)
     },
+    global: {
+      fetch: (...args) => {
+        console.log('Supabase request:', args[0]);
+        return fetch(...args);
+      }
+    }
   });
 } else {
   // Provide a safe mock to prevent 'undefined' crashes down the line
