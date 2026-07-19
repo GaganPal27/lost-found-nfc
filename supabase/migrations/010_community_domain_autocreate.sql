@@ -111,14 +111,42 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 6. Close the cross-college leak.
--- The original policies from 009_community_v2.sql were:
---   community_groups SELECT: USING (true)                    -- every group, every college, world-readable
---   group_members INSERT:    user_id = self OR creator_id = self  -- self-join always passes, no group scoping at all
--- That meant any signed-in user could read AND join any sub-group from any college.
--- These replacements scope sub-groups to members of their parent official community,
--- while keeping official communities themselves publicly browsable (needed for
--- join-community.tsx search-and-join).
+-- 6. Close the cross-college leak using SECURITY DEFINER functions.
+-- Using Security Definer functions for RLS checks prevents infinite recursion
+-- by bypassing RLS during the inner query execution.
+
+CREATE OR REPLACE FUNCTION public.user_is_active_member(g_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM group_members
+    WHERE group_id = g_id
+    AND user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
+    AND status = 'active'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.is_official_group(g_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM community_groups
+    WHERE id = g_id AND is_official = true
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.is_group_creator(g_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM community_groups
+    WHERE id = g_id AND creator_id = (SELECT id FROM users WHERE auth_id = auth.uid())
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 
 DROP POLICY IF EXISTS "community_groups_public_read" ON community_groups;
 DROP POLICY IF EXISTS "official_groups_public_read" ON community_groups;
@@ -126,16 +154,8 @@ DROP POLICY IF EXISTS "community_groups_scoped_read" ON community_groups;
 CREATE POLICY "community_groups_scoped_read" ON community_groups
   FOR SELECT USING (
     is_official = true
-    OR id IN (
-      SELECT group_id FROM group_members
-      WHERE user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
-      AND status = 'active'
-    )
-    OR parent_group_id IN (
-      SELECT group_id FROM group_members
-      WHERE user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
-      AND status = 'active'
-    )
+    OR public.user_is_active_member(id)
+    OR public.user_is_active_member(parent_group_id)
   );
 
 DROP POLICY IF EXISTS "group_members_insert" ON group_members;
@@ -144,22 +164,11 @@ CREATE POLICY "group_members_scoped_insert" ON group_members
   FOR INSERT WITH CHECK (
     user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
     AND (
-      -- Official communities: anyone may self-join (this is how domain
-      -- auto-join and the manual "search communities" screen both work).
-      group_id IN (SELECT id FROM community_groups WHERE is_official = true)
-      -- Sub-groups: only if it belongs to the college you're already in.
-      OR group_id IN (
-        SELECT cg.id FROM community_groups cg
-        WHERE cg.parent_group_id IN (
-          SELECT group_id FROM group_members
-          WHERE user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
-          AND status = 'active'
-        )
-      )
-      -- Creator inserting their own admin row right after creating a group.
-      OR group_id IN (
-        SELECT id FROM community_groups
-        WHERE creator_id = (SELECT id FROM users WHERE auth_id = auth.uid())
-      )
+      -- Official communities: anyone may self-join
+      public.is_official_group(group_id)
+      -- Sub-groups: only if it belongs to the college you're already in
+      OR public.user_is_active_member( (SELECT parent_group_id FROM community_groups WHERE id = group_id) )
+      -- Creator inserting their own admin row
+      OR public.is_group_creator(group_id)
     )
   );
