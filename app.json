@@ -72,7 +72,7 @@
     },
     "plugins": [
       "expo-router",
-      "@sentry/react-native/expo",
+
       [
         "react-native-nfc-manager",
         {
