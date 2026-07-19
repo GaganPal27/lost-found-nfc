@@ -9,6 +9,12 @@ import BubbleNotification, { BubbleNotificationData } from '../components/Bubble
 import FloatingTabBar, { TAB_ROUTES } from '../components/FloatingTabBar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import '../../global.css';
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  debug: false,
+});
 
 const safeRegisterPushToken = async (userId: string) => {
   try {
@@ -65,7 +71,7 @@ const safeStopBLE = async () => {
   try { const { stopBLEScanning } = await import('../lib/ble'); stopBLEScanning(); } catch {}
 };
 
-export default function RootLayout() {
+function RootLayout() {
   const { session, initialized: authInitialized, setSession } = useAuthStore();
   const { refreshTier, initialized: subInitialized, tier } = useSubscriptionStore();
   const segments = useSegments();
@@ -285,3 +291,5 @@ export default function RootLayout() {
     </View>
   );
 }
+
+export default Sentry.wrap(RootLayout);
