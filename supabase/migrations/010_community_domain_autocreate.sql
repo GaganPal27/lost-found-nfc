@@ -132,11 +132,9 @@ CREATE POLICY "community_groups_scoped_read" ON community_groups
       AND status = 'active'
     )
     OR parent_group_id IN (
-      SELECT gc.id FROM community_groups gc
-      JOIN group_members gm ON gm.group_id = gc.id
-      WHERE gc.is_official = true
-      AND gm.user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
-      AND gm.status = 'active'
+      SELECT group_id FROM group_members
+      WHERE user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
+      AND status = 'active'
     )
   );
 
@@ -153,11 +151,9 @@ CREATE POLICY "group_members_scoped_insert" ON group_members
       OR group_id IN (
         SELECT cg.id FROM community_groups cg
         WHERE cg.parent_group_id IN (
-          SELECT gc.id FROM community_groups gc
-          JOIN group_members gm ON gm.group_id = gc.id
-          WHERE gc.is_official = true
-          AND gm.user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
-          AND gm.status = 'active'
+          SELECT group_id FROM group_members
+          WHERE user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
+          AND status = 'active'
         )
       )
       -- Creator inserting their own admin row right after creating a group.
