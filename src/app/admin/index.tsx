@@ -269,7 +269,7 @@ export default function AdminDashboard() {
 
       {rpcError && <View style={s.warn}><Text style={{ color: '#eab308', fontSize: 11, fontWeight: '600' }}>⚠ Run 007_admin_rpc.sql for full cross-user access.</Text></View>}
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor="#06b6d4" />}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor="#06b6d4" colors={['#06b6d4']} />}>
         <Text style={s.listHint}>{users.length} users · tap to expand</Text>
         {users.map(u => <UserRow key={u.id} user={u} userItems={enriched.filter(i => i.user_id === u.id)} onRole={applyRole} onTier={applyTier} />)}
         {!users.length && <View style={s.center}><Text style={{ fontSize: 40, marginBottom: 12 }}>👥</Text><Text style={{ color: '#475569', textAlign: 'center', lineHeight: 22 }}>No users found.{'\n'}Run 007_admin_rpc.sql to enable full access.</Text></View>}

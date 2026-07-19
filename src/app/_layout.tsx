@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Slot, Stack, useRouter, useSegments, usePathname } from 'expo-router';
 import { StatusBar, Platform, AppState, AppStateStatus, View } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { useSubscriptionStore } from '../stores/subscriptionStore';

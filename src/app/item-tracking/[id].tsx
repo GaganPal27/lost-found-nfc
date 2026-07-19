@@ -202,7 +202,7 @@ export default function ItemTrackingScreen() {
 
       <ScrollView
         className="flex-1"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#06b6d4" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#06b6d4" colors={['#06b6d4']} />}
       >
         {/* Map */}
         <View style={{ height: 320 }}>

@@ -305,6 +305,7 @@ export default function CommunityScreen() {
         supabase
           .from('community_groups')
           .select('*')
+          .eq('is_official', false)
           .order('created_at', { ascending: false })
           .limit(50),
       ]);
@@ -546,8 +547,26 @@ export default function CommunityScreen() {
             <GroupCard group={item} onPress={() => handleGroupPress(item.id)} />
           )}
           contentContainerStyle={styles.listContent}
+          ListHeaderComponent={
+            <View>
+              <TouchableOpacity
+                style={styles.createGroupBtn}
+                activeOpacity={0.8}
+                onPress={() => router.push('/create-group')}
+              >
+                <Text style={styles.createGroupBtnText}>+ Create Group</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.joinCommunityLink}
+                activeOpacity={0.7}
+                onPress={() => router.push('/join-community')}
+              >
+                <Text style={styles.joinCommunityLinkText}>Can't find your college? Search communities →</Text>
+              </TouchableOpacity>
+            </View>
+          }
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366f1" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366f1" colors={['#6366f1']} />
           }
           ListEmptyComponent={
             <View style={styles.empty}>
@@ -566,6 +585,24 @@ export default function CommunityScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   center:    { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  createGroupBtn: {
+    backgroundColor: '#6366f1',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 4,
+    shadowColor: '#6366f1',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  createGroupBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  joinCommunityLink: { alignItems: 'center', marginTop: 10, marginBottom: 6 },
+  joinCommunityLinkText: { color: '#6366f1', fontWeight: '700', fontSize: 13 },
 
   // Header
   header: {

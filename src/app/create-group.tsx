@@ -54,6 +54,28 @@ export default function CreateGroupScreen() {
 
       const dbUserId = profile.id; // This is the real users.id Postgres UUID
 
+      // ── STEP 1.5: Find the creator's own official (college) community ────
+      // Every sub-group must belong to exactly one college, so other
+      // colleges' students can't see or join it (enforced by RLS too).
+      const { data: officialMembership, error: officialError } = await supabase
+        .from('group_members')
+        .select('group_id, community_groups!inner(is_official)')
+        .eq('user_id', dbUserId)
+        .eq('status', 'active')
+        .eq('community_groups.is_official', true)
+        .maybeSingle();
+
+      if (officialError || !officialMembership) {
+        Alert.alert(
+          'Join your college first',
+          'You need to be part of your official college community before creating a sub-group. If you weren\u2019t auto-joined, use "Search communities" on the Groups tab.'
+        );
+        setLoading(false);
+        return;
+      }
+
+      const parentGroupId = officialMembership.group_id;
+
       // ── STEP 2: Create the group using the real users.id ─────────────────
       const { data: group, error: groupError } = await supabase
         .from('community_groups')
@@ -62,6 +84,7 @@ export default function CreateGroupScreen() {
           description: description.trim(),
           type: isPublic ? 'public' : 'private',
           creator_id: dbUserId,   // ✅ real users.id, not auth UID
+          parent_group_id: parentGroupId, // scopes this sub-group to the creator's college
         })
         .select()
         .single();

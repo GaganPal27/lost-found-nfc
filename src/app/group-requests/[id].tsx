@@ -19,14 +19,14 @@ export default function GroupRequestsScreen() {
   const fetchRequests = async () => {
     const { data } = await supabase
       .from('group_members')
-      .select('*, user:user_id(name, email)')
+      .select('*, user:user_id(full_name, email)')
       .eq('group_id', id)
       .eq('status', 'pending');
       
     if (data) {
       const formatted = data.map(r => ({
         ...r,
-        user_name: r.user?.name || r.user?.email?.split('@')[0] || 'Unknown User'
+        user_name: r.user?.full_name || r.user?.email?.split('@')[0] || 'Unknown User'
       }));
       setRequests(formatted);
     }

@@ -182,7 +182,7 @@ export default function CreateCommunityPostScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 48 },
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 120 },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}

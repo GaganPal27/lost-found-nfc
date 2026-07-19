@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, TextInput, Alert, ScrollView,
   ActivityIndicator, Animated, StatusBar, Linking, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
@@ -18,6 +19,7 @@ export default function FinderConnectScreen() {
     item_name: string;
   }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
 
   const [step, setStep] = useState<Step>('confirm');
@@ -160,7 +162,7 @@ export default function FinderConnectScreen() {
       <View className="flex-1 bg-slate-50">
         <StatusBar barStyle="dark-content" />
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 64, paddingBottom: 48 }}
+          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 64, paddingBottom: insets.bottom + 120 }}
           keyboardShouldPersistTaps="handled"
         >
           {/* Back */}

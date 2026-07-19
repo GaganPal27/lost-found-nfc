@@ -167,7 +167,7 @@ export default function BLEStatusScreen() {
       <StatusBar barStyle="dark-content" />
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 60, paddingTop: 60 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#06b6d4" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#06b6d4" colors={['#06b6d4']} />}
       >
         {/* Back */}
         <TouchableOpacity onPress={() => router.back()} className="mb-6 flex-row items-center" activeOpacity={0.7}>
