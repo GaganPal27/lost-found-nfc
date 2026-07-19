@@ -112,9 +112,23 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 6. Close the cross-college leak using SECURITY DEFINER functions.
--- Using Security Definer functions for RLS checks prevents infinite recursion
--- by bypassing RLS during the inner query execution.
+-- We must completely wipe all existing policies on these tables to guarantee
+-- no rogue recursive policies from the dashboard are interfering.
+DO $$
+DECLARE
+    pol RECORD;
+BEGIN
+    FOR pol IN SELECT policyname FROM pg_policies WHERE tablename = 'community_groups' LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON community_groups', pol.policyname);
+    END LOOP;
+    
+    FOR pol IN SELECT policyname FROM pg_policies WHERE tablename = 'group_members' LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON group_members', pol.policyname);
+    END LOOP;
+END
+$$;
 
+-- Helper functions (100% NO inline subqueries in policies to avoid query planner recursion)
 CREATE OR REPLACE FUNCTION public.user_is_active_member(g_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -147,10 +161,30 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+CREATE OR REPLACE FUNCTION public.is_group_admin(g_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM group_members
+    WHERE group_id = g_id
+    AND user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
+    AND role = 'admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
-DROP POLICY IF EXISTS "community_groups_public_read" ON community_groups;
-DROP POLICY IF EXISTS "official_groups_public_read" ON community_groups;
-DROP POLICY IF EXISTS "community_groups_scoped_read" ON community_groups;
+CREATE OR REPLACE FUNCTION public.get_parent_group(g_id UUID)
+RETURNS UUID AS $$
+DECLARE
+  p_id UUID;
+BEGIN
+  SELECT parent_group_id INTO p_id FROM community_groups WHERE id = g_id;
+  RETURN p_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Recreate all policies cleanly
+-- community_groups
 CREATE POLICY "community_groups_scoped_read" ON community_groups
   FOR SELECT USING (
     is_official = true
@@ -158,17 +192,31 @@ CREATE POLICY "community_groups_scoped_read" ON community_groups
     OR public.user_is_active_member(parent_group_id)
   );
 
-DROP POLICY IF EXISTS "group_members_insert" ON group_members;
-DROP POLICY IF EXISTS "group_members_scoped_insert" ON group_members;
+CREATE POLICY "community_groups_auth_insert" ON community_groups
+  FOR INSERT WITH CHECK (
+    creator_id = (SELECT id FROM users WHERE auth_id = auth.uid())
+  );
+
+CREATE POLICY "community_groups_admin_update" ON community_groups
+  FOR UPDATE USING (
+    public.is_group_admin(id)
+  );
+
+-- group_members
+CREATE POLICY "group_members_read" ON group_members
+  FOR SELECT USING (true);
+
 CREATE POLICY "group_members_scoped_insert" ON group_members
   FOR INSERT WITH CHECK (
     user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
     AND (
-      -- Official communities: anyone may self-join
       public.is_official_group(group_id)
-      -- Sub-groups: only if it belongs to the college you're already in
-      OR public.user_is_active_member( (SELECT parent_group_id FROM community_groups WHERE id = group_id) )
-      -- Creator inserting their own admin row
+      OR public.user_is_active_member( public.get_parent_group(group_id) )
       OR public.is_group_creator(group_id)
     )
+  );
+
+CREATE POLICY "group_members_admin_update" ON group_members
+  FOR UPDATE USING (
+    public.is_group_admin(group_id)
   );
