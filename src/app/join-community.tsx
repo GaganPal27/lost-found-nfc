@@ -78,8 +78,8 @@ export default function JoinCommunityScreen() {
 
       <Text style={styles.title}>Find Your Community</Text>
       <Text style={styles.subtitle}>
-        We couldn\u2019t auto-detect your college from your email. Search for it below \u2014
-        if it doesn\u2019t exist yet, create it and you\u2019ll be its first member.
+        We couldn't auto-detect your college from your email. Search for it below —
+        if it doesn't exist yet, create it and you'll be its first member.
       </Text>
 
       <TextInput
