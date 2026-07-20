@@ -170,6 +170,19 @@ RETURNS UUID AS $$
   SELECT parent_group_id FROM community_groups WHERE id = check_group_id;
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
+CREATE OR REPLACE FUNCTION public.get_my_group_ids()
+RETURNS SETOF UUID AS $$
+  SELECT group_id FROM group_members
+  WHERE user_id = (SELECT id FROM users WHERE auth_id = auth.uid());
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION public.get_my_admin_group_ids()
+RETURNS SETOF UUID AS $$
+  SELECT group_id FROM group_members
+  WHERE user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
+  AND role = 'admin';
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
 -- Recreate all policies cleanly
 -- community_groups
 CREATE POLICY "community_groups_scoped_read" ON community_groups
@@ -186,12 +199,14 @@ CREATE POLICY "community_groups_auth_insert" ON community_groups
 
 CREATE POLICY "community_groups_admin_update" ON community_groups
   FOR UPDATE USING (
-    public.is_group_admin(id)
+    id IN (SELECT public.get_my_admin_group_ids())
   );
 
 -- group_members
 CREATE POLICY "group_members_read" ON group_members
-  FOR SELECT USING (true);
+  FOR SELECT USING (
+    group_id IN (SELECT public.get_my_group_ids())
+  );
 
 CREATE POLICY "group_members_scoped_insert" ON group_members
   FOR INSERT WITH CHECK (
@@ -205,5 +220,5 @@ CREATE POLICY "group_members_scoped_insert" ON group_members
 
 CREATE POLICY "group_members_admin_update" ON group_members
   FOR UPDATE USING (
-    public.is_group_admin(group_id)
+    group_id IN (SELECT public.get_my_admin_group_ids())
   );
