@@ -129,59 +129,46 @@ END
 $$;
 
 -- Helper functions (100% NO inline subqueries in policies to avoid query planner recursion)
-CREATE OR REPLACE FUNCTION public.user_is_active_member(g_id UUID)
+CREATE OR REPLACE FUNCTION public.user_is_active_member(check_group_id UUID)
 RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN EXISTS (
+  SELECT EXISTS (
     SELECT 1 FROM group_members
-    WHERE group_id = g_id
+    WHERE group_id = check_group_id
     AND user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
     AND status = 'active'
   );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
 
-CREATE OR REPLACE FUNCTION public.is_official_group(g_id UUID)
+CREATE OR REPLACE FUNCTION public.is_official_group(check_group_id UUID)
 RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN EXISTS (
+  SELECT EXISTS (
     SELECT 1 FROM community_groups
-    WHERE id = g_id AND is_official = true
+    WHERE id = check_group_id AND is_official = true
   );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
 
-CREATE OR REPLACE FUNCTION public.is_group_creator(g_id UUID)
+CREATE OR REPLACE FUNCTION public.is_group_creator(check_group_id UUID)
 RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN EXISTS (
+  SELECT EXISTS (
     SELECT 1 FROM community_groups
-    WHERE id = g_id AND creator_id = (SELECT id FROM users WHERE auth_id = auth.uid())
+    WHERE id = check_group_id AND creator_id = (SELECT id FROM users WHERE auth_id = auth.uid())
   );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
 
-CREATE OR REPLACE FUNCTION public.is_group_admin(g_id UUID)
+CREATE OR REPLACE FUNCTION public.is_group_admin(check_group_id UUID)
 RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN EXISTS (
+  SELECT EXISTS (
     SELECT 1 FROM group_members
-    WHERE group_id = g_id
+    WHERE group_id = check_group_id
     AND user_id = (SELECT id FROM users WHERE auth_id = auth.uid())
     AND role = 'admin'
   );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
 
-CREATE OR REPLACE FUNCTION public.get_parent_group(g_id UUID)
+CREATE OR REPLACE FUNCTION public.get_parent_group(check_group_id UUID)
 RETURNS UUID AS $$
-DECLARE
-  p_id UUID;
-BEGIN
-  SELECT parent_group_id INTO p_id FROM community_groups WHERE id = g_id;
-  RETURN p_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+  SELECT parent_group_id FROM community_groups WHERE id = check_group_id;
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Recreate all policies cleanly
 -- community_groups
