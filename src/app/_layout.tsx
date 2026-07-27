@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Slot, Stack, useRouter, useSegments, usePathname } from 'expo-router';
 import { StatusBar, Platform, AppState, AppStateStatus, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Sentry from '@sentry/react-native';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
-import { useSubscriptionStore } from '../stores/subscriptionStore';
+import { useSubscriptionStore, getRawEntitlementTier } from '../stores/subscriptionStore';
 import { updateUserLocation } from '../lib/location';
 import BubbleNotification, { BubbleNotificationData } from '../components/BubbleNotification';
 import FloatingTabBar, { TAB_ROUTES } from '../components/FloatingTabBar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import '../../global.css';
 
 Sentry.init({
@@ -39,11 +41,19 @@ const safeRegisterPushToken = async (userId: string) => {
       return;
     }
 
-    // Get the Expo push token
-    const tokenData = await Notifications.getExpoPushTokenAsync();
+    // Get the Expo push token — projectId is required on standalone builds
+    // (Expo SDK 49+); without it this either throws or silently returns a
+    // token that doesn't route correctly. This was very likely the actual
+    // reason push notifications never arrived, even after the RLS/table
+    // fixes — the token may never have been generated correctly at all.
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId: '0dcc9297-8746-43a0-bbf0-ece27e03b900',
+    });
     const token = tokenData.data;
 
-    // Save token to users table (our 010_push_tokens.sql migration)
+    // Save token to users table.
+    // IMPORTANT: userId = session.user.id = Supabase auth UID.
+    // In our users table, that maps to auth_id column, NOT id (which is our custom UUID).
     const { error } = await supabase
       .from('users')
       .update({
@@ -51,10 +61,15 @@ const safeRegisterPushToken = async (userId: string) => {
         push_notifications_enabled: true,
         push_token_updated_at: new Date().toISOString(),
       })
-      .eq('id', userId);
+      .eq('auth_id', userId);
 
-    if (error) console.warn('Failed to save push token:', error.message);
-    else console.log('Push token saved successfully.');
+    if (error) {
+      console.warn('Failed to save push token:', error.message);
+      Sentry.captureMessage(`Push token save failed for user ${userId}: ${error.message}`, 'error');
+    } else {
+      console.log('Push token saved successfully.');
+      Sentry.addBreadcrumb({ category: 'push', message: `Push token saved for user ${userId}`, level: 'info' });
+    }
   } catch (e) {
     console.warn('Push token registration failed:', e);
   }
@@ -83,6 +98,13 @@ function RootLayout() {
   
   // Bubbles state
   const [bubbles, setBubbles] = useState<BubbleNotificationData[]>([]);
+  // Hard timeout — if SDK inits take > 4s, force-route so the app
+  // never freezes on a white screen after installing a new APK.
+  const [startupTimeout, setStartupTimeout] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setStartupTimeout(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
   
   // AppState for location
   const appState = useRef(AppState.currentState);
@@ -91,8 +113,17 @@ function RootLayout() {
     safeInitRevenueCat();
 
     supabase.auth.getSession().then(async ({ data: { session } }: { data: { session: any } }) => {
-      await setSession(session);
-      await refreshTier();
+      // Fire the role lookup (setSession) and the RevenueCat entitlement fetch
+      // at the same time instead of waiting for one to finish before starting
+      // the other — this was the main source of slow cold starts.
+      const rolePromise = setSession(session);
+      const tierPromise = session?.user?.id ? getRawEntitlementTier() : Promise.resolve('basic' as const);
+      const [, rawTier] = await Promise.all([rolePromise, tierPromise]);
+
+      // Apply the admin override now that role info has resolved.
+      const finalTier = useAuthStore.getState().isAdmin ? 'max' : rawTier;
+      useSubscriptionStore.getState().setTier(finalTier);
+
       if (session?.user?.id) safeRegisterPushToken(session.user.id);
     }).catch(async (err) => {
       console.warn("Auth initialization failed:", err);
@@ -107,8 +138,11 @@ function RootLayout() {
       const newId = session?.user?.id ?? null;
       if (newId === lastSessionId) return; // Avoid redundant fetches
       lastSessionId = newId;
-      await setSession(session);
-      await refreshTier();
+      const rolePromise = setSession(session);
+      const tierPromise = session?.user?.id ? getRawEntitlementTier() : Promise.resolve('basic' as const);
+      const [, rawTier] = await Promise.all([rolePromise, tierPromise]);
+      const finalTier = useAuthStore.getState().isAdmin ? 'max' : rawTier;
+      useSubscriptionStore.getState().setTier(finalTier);
       if (session?.user?.id) safeRegisterPushToken(session.user.id);
     });
 
@@ -123,7 +157,7 @@ function RootLayout() {
           name: 'Lost & Found Alerts',
           importance: Notifications.AndroidImportance.MAX,  // Pops over other apps, plays sound
           vibrationPattern: [0, 250, 150, 250],             // Buzz-pause-buzz pattern
-          lightColor: '#6366F1',                            // Indigo LED flash (on supported devices)
+          lightColor: '#6366f1',                            // Indigo LED flash (on supported devices)
           sound: 'default',
           enableVibrate: true,
           showBadge: true,
@@ -234,22 +268,39 @@ function RootLayout() {
     }
   }, [tier, subInitialized]);
 
-  const publicRoutes = ['login', 'registration', 'forgot-password', 'item', 'terms-of-service', 'finder-connect'];
+  const publicRoutes = ['login', 'registration', 'forgot-password', 'item', 'terms-of-service', 'finder-connect', 'select-college'];
   const inAuthScreen = publicRoutes.slice(0, 3).includes(segments[0] as string);
   const inOnboarding = segments[0] === 'onboarding';
+  const inSelectCollege = segments[0] === 'select-college';
 
   useEffect(() => {
-    if (!authInitialized || !subInitialized) return;
+    if ((!authInitialized || !subInitialized) && !startupTimeout) return;
 
     const inPublicRoute = publicRoutes.includes(segments[0] as string);
 
-    if (!session && !inPublicRoute && !inOnboarding) {
-      router.replace('/login');
-    } else if (session) {
+    if (!session) {
+      if (!inPublicRoute && !inOnboarding && !inSelectCollege) {
+        // Unauthenticated user trying to access protected route.
+        // Check where they should be sent.
+        Promise.all([
+          AsyncStorage.getItem('selectedCollegeId'),
+          AsyncStorage.getItem('hasSeenOnboarding')
+        ]).then(([collegeId, hasSeen]) => {
+          if (!collegeId) {
+            router.replace('/select-college');
+          } else if (hasSeen !== 'true') {
+            router.replace('/onboarding');
+          } else {
+            router.replace('/login');
+          }
+        });
+      }
+    } else {
+      // User is authenticated
       AsyncStorage.getItem('hasSeenOnboarding').then((hasSeen) => {
         if (hasSeen !== 'true' && !inOnboarding) {
           router.replace('/onboarding');
-        } else if (hasSeen === 'true' && (inAuthScreen || inOnboarding)) {
+        } else if (hasSeen === 'true' && (inAuthScreen || inOnboarding || inSelectCollege)) {
           router.replace('/');
         }
       });
@@ -267,28 +318,30 @@ function RootLayout() {
   const shouldHideTabBar = hideTabBarPrefixes.some((prefix) => pathname?.startsWith(prefix));
 
   return (
-    <View style={{ flex: 1 }}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
-      
-      {/* Render active bubbles over everything */}
-      {bubbles.map((b, idx) => (
-        <BubbleNotification
-          key={b.id}
-          notification={b}
-          index={idx}
-          onDismiss={dismissBubble}
-        />
-      ))}
-      
-      {/* Render floating tab bar everywhere except group and post screens */}
-      {session && !inAuthScreen && !inOnboarding && !shouldHideTabBar && (
-        <FloatingTabBar
-          activeRoute={TAB_ROUTES.find(t => pathname && pathname.includes(t.name))?.name ?? 'my-items'}
-          onTabPress={(route) => router.push(`/(tabs)/${route}` as any)}
-        />
-      )}
-    </View>
+    <SafeAreaProvider>
+      <View style={{ flex: 1 }}>
+        <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
+        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+
+        {/* Render active bubbles over everything */}
+        {bubbles.map((b, idx) => (
+          <BubbleNotification
+            key={b.id}
+            notification={b}
+            index={idx}
+            onDismiss={dismissBubble}
+          />
+        ))}
+
+        {/* Render floating tab bar everywhere except group and post screens */}
+        {session && !inAuthScreen && !inOnboarding && !shouldHideTabBar && (
+          <FloatingTabBar
+            activeRoute={TAB_ROUTES.find(t => pathname && pathname.includes(t.name))?.name ?? 'my-items'}
+            onTabPress={(route) => router.push(`/(tabs)/${route}` as any)}
+          />
+        )}
+      </View>
+    </SafeAreaProvider>
   );
 }
 

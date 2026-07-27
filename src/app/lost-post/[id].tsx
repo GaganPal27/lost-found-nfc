@@ -8,7 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 const STATUS_COLORS: Record<string, { bg: string; dot: string; text: string; label: string }> = {
   searching: { bg: '#FEF3C7', dot: '#F59E0B', text: '#D97706', label: 'SEARCHING' },
   found:     { bg: '#DCFCE7', dot: '#22C55E', text: '#16A34A', label: 'FOUND'     },
-  resolved:  { bg: '#E0E7FF', dot: '#6366F1', text: '#4338CA', label: 'RESOLVED'  },
+  resolved:  { bg: '#E0E7FF', dot: '#6366f1', text: '#4338CA', label: 'RESOLVED'  },
 };
 
 function timeAgo(dateStr: string) {

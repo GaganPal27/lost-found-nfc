@@ -83,14 +83,34 @@ export default function CommunityClaimScreen() {
         return;
       }
 
-      // Notify finder via notifications table
+      // Notify finder via notifications table (in-app)
       if (item) {
         await supabase.from('notifications').insert({
           user_id:  item.finder_id,
-          type:     'message',
+          type: 'claim_review',
+          title: 'Item Claimed!',
           message:  `Someone claims to own "${item.title}" — review their proof answer.`,
           metadata: { community_item_id: id, claimant_id: dbUserId },
         }).then(() => {}); // Non-fatal if this fails
+
+        // Also send a real push notification — item.finder_id is the profile
+        // id, but push_tokens.user_id expects the auth id, so resolve it via
+        // the same RPC (direct table read is blocked by own_user_read RLS).
+        try {
+          const { data: finderAuthId } = await supabase
+            .rpc('get_user_auth_id', { profile_id: item.finder_id });
+          if (finderAuthId) {
+            await supabase.functions.invoke('send-push-notification', {
+              body: {
+                owner_id: finderAuthId,
+                item_name: item.title,
+                finder_name: 'A claimant',
+              },
+            });
+          }
+        } catch (pushErr) {
+          console.warn('Push notification for claim failed:', pushErr);
+        }
       }
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

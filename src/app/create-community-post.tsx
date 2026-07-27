@@ -176,13 +176,13 @@ export default function CreateCommunityPostScreen() {
   const catMeta = CATEGORY_META[category] || CATEGORY_META.Other;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 34) }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#f8f9ff" />
       <KeyboardAwareScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 120 },
+          { paddingTop: insets.top + 20, paddingBottom: 24 },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}

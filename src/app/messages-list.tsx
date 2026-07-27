@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, RefreshControl,
   StatusBar, Animated, ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 
@@ -35,18 +35,26 @@ export function MessagesList() {
   useEffect(() => {
     Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     if (user?.id) {
-      fetchConversations();
-      // Real-time: new conversations
+      // Real-time: new conversations (works when the screen is already open)
       const channel = supabase
         .channel('connect_convs')
         .on('postgres_changes',
-          { event: '*', schema: 'public', table: 'conversations' },
-          () => fetchConversations()
+          { event: '*', schema: 'public', table: 'conversations', filter: `owner_id=eq.${user.id}` },
+          () => { fetchConversations(); }
         )
         .subscribe();
       return () => { supabase.removeChannel(channel); };
     }
   }, [user]);
+
+  // Refetch every time this tab regains focus — the previous version only
+  // fetched once on mount, so navigating away and back showed stale/empty
+  // data even after a conversation was created in the meantime.
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) fetchConversations();
+    }, [user])
+  );
 
   const fetchConversations = async () => {
     if (!user?.id) return;

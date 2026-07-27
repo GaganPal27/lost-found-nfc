@@ -1,0 +1,557 @@
+diff --git a/.env b/.env
+index f823b41..24eb70f 100644
+--- a/.env
++++ b/.env
+@@ -1,3 +1,4 @@
+ EXPO_PUBLIC_SUPABASE_URL=https://pzhuszyyykususkmzpud.supabase.co
+ EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_rOOgbfNSW4VbmmJPmMDK6Q_qj0lY6rQ
+ EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=YOUR_REVENUECAT_ANDROID_KEY
++EXPO_PUBLIC_SENTRY_DSN=
+diff --git a/app.json b/app.json
+index 47926f7..e07f007 100644
+--- a/app.json
++++ b/app.json
+@@ -40,6 +40,8 @@
+         "android.permission.ACCESS_COARSE_LOCATION",
+         "android.permission.ACCESS_FINE_LOCATION",
+         "android.permission.ACCESS_BACKGROUND_LOCATION",
++        "android.permission.FOREGROUND_SERVICE",
++        "android.permission.FOREGROUND_SERVICE_LOCATION",
+         "android.permission.BLUETOOTH",
+         "android.permission.BLUETOOTH_ADMIN"
+       ],
+@@ -66,6 +68,7 @@
+     },
+     "plugins": [
+       "expo-router",
++      "@sentry/react-native/expo",
+       [
+         "react-native-nfc-manager",
+         {
+@@ -84,7 +87,9 @@
+       [
+         "expo-location",
+         {
+-          "locationAlwaysAndWhenInUsePermission": "Allow Lost & Found to use your location to record where items were tapped or detected."
++          "locationAlwaysAndWhenInUsePermission": "Allow Lost & Found to use your location to record where items were tapped or detected.",
++          "isAndroidBackgroundLocationEnabled": true,
++          "isAndroidForegroundServiceEnabled": true
+         }
+       ]
+     ],
+diff --git a/package.json b/package.json
+index 3dd9de6..dd2f155 100644
+--- a/package.json
++++ b/package.json
+@@ -12,6 +12,7 @@
+     "@expo/metro-runtime": "~6.1.2",
+     "@react-native-async-storage/async-storage": "^3.1.1",
+     "@react-native-picker/picker": "2.11.1",
++    "@sentry/react-native": "^8.19.0",
+     "@supabase/supabase-js": "^2.100.1",
+     "base64-arraybuffer": "^1.0.2",
+     "expo": "~54.0.33",
+diff --git a/src/app/(tabs)/community.tsx b/src/app/(tabs)/community.tsx
+index ba4e580..2648477 100644
+--- a/src/app/(tabs)/community.tsx
++++ b/src/app/(tabs)/community.tsx
+@@ -546,8 +546,26 @@ export default function CommunityScreen() {
+             <GroupCard group={item} onPress={() => handleGroupPress(item.id)} />
+           )}
+           contentContainerStyle={styles.listContent}
++          ListHeaderComponent={
++            <View>
++              <TouchableOpacity
++                style={styles.createGroupBtn}
++                activeOpacity={0.8}
++                onPress={() => router.push('/create-group')}
++              >
++                <Text style={styles.createGroupBtnText}>+ Create Group</Text>
++              </TouchableOpacity>
++              <TouchableOpacity
++                style={styles.joinCommunityLink}
++                activeOpacity={0.7}
++                onPress={() => router.push('/join-community')}
++              >
++                <Text style={styles.joinCommunityLinkText}>Can't find your college? Search communities →</Text>
++              </TouchableOpacity>
++            </View>
++          }
+           refreshControl={
+-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366f1" />
++            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366f1" colors={['#6366f1']} />
+           }
+           ListEmptyComponent={
+             <View style={styles.empty}>
+@@ -567,6 +585,24 @@ const styles = StyleSheet.create({
+   container: { flex: 1, backgroundColor: '#f8fafc' },
+   center:    { flex: 1, alignItems: 'center', justifyContent: 'center' },
+ 
++  createGroupBtn: {
++    backgroundColor: '#6366f1',
++    borderRadius: 16,
++    paddingVertical: 14,
++    alignItems: 'center',
++    marginHorizontal: 20,
++    marginTop: 16,
++    marginBottom: 4,
++    shadowColor: '#6366f1',
++    shadowOpacity: 0.3,
++    shadowRadius: 10,
++    shadowOffset: { width: 0, height: 4 },
++    elevation: 5,
++  },
++  createGroupBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
++  joinCommunityLink: { alignItems: 'center', marginTop: 10, marginBottom: 6 },
++  joinCommunityLinkText: { color: '#6366f1', fontWeight: '700', fontSize: 13 },
++
+   // Header
+   header: {
+     backgroundColor: '#ffffff',
+diff --git a/src/app/_layout.tsx b/src/app/_layout.tsx
+index 6040c8b..833ac27 100644
+--- a/src/app/_layout.tsx
++++ b/src/app/_layout.tsx
+@@ -1,6 +1,7 @@
+ import { useEffect, useRef, useState } from 'react';
+ import { Slot, Stack, useRouter, useSegments, usePathname } from 'expo-router';
+ import { StatusBar, Platform, AppState, AppStateStatus, View } from 'react-native';
++import * as Sentry from '@sentry/react-native';
+ import { supabase } from '../lib/supabase';
+ import { useAuthStore } from '../stores/authStore';
+ import { useSubscriptionStore } from '../stores/subscriptionStore';
+@@ -10,6 +11,21 @@ import FloatingTabBar, { TAB_ROUTES } from '../components/FloatingTabBar';
+ import AsyncStorage from '@react-native-async-storage/async-storage';
+ import '../../global.css';
+ 
++// Sentry must be initialized once, at module scope, before any component renders.
++// This is what catches the ClassCastException / native crashes going forward —
++// no ADB or physical cable needed, the trace uploads automatically on next launch.
++Sentry.init({
++  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
++  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN, // no-ops safely if DSN isn't set yet
++  debug: false,
++  tracesSampleRate: 1.0,
++  // Native crashes (Java/Kotlin ClassCastException, SIGSEGV, etc.) — not just JS errors
++  enableNative: true,
++  enableNativeCrashHandling: true,
++  attachStacktrace: true,
++  environment: __DEV__ ? 'development' : 'production',
++});
++
+ const safeRegisterPushToken = async (userId: string) => {
+   try {
+     const { default: Notifications } = await import('expo-notifications');
+@@ -65,7 +81,7 @@ const safeStopBLE = async () => {
+   try { const { stopBLEScanning } = await import('../lib/ble'); stopBLEScanning(); } catch {}
+ };
+ 
+-export default function RootLayout() {
++function RootLayout() {
+   const { session, initialized: authInitialized, setSession } = useAuthStore();
+   const { refreshTier, initialized: subInitialized, tier } = useSubscriptionStore();
+   const segments = useSegments();
+@@ -285,3 +301,5 @@ export default function RootLayout() {
+     </View>
+   );
+ }
++
++export default Sentry.wrap(RootLayout);
+diff --git a/src/app/admin/index.tsx b/src/app/admin/index.tsx
+index ecb6da8..a5bde24 100644
+--- a/src/app/admin/index.tsx
++++ b/src/app/admin/index.tsx
+@@ -269,7 +269,7 @@ export default function AdminDashboard() {
+ 
+       {rpcError && <View style={s.warn}><Text style={{ color: '#eab308', fontSize: 11, fontWeight: '600' }}>⚠ Run 007_admin_rpc.sql for full cross-user access.</Text></View>}
+ 
+-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor="#06b6d4" />}>
++      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor="#06b6d4" colors={['#06b6d4']} />}>
+         <Text style={s.listHint}>{users.length} users · tap to expand</Text>
+         {users.map(u => <UserRow key={u.id} user={u} userItems={enriched.filter(i => i.user_id === u.id)} onRole={applyRole} onTier={applyTier} />)}
+         {!users.length && <View style={s.center}><Text style={{ fontSize: 40, marginBottom: 12 }}>👥</Text><Text style={{ color: '#475569', textAlign: 'center', lineHeight: 22 }}>No users found.{'\n'}Run 007_admin_rpc.sql to enable full access.</Text></View>}
+diff --git a/src/app/ble-status.tsx b/src/app/ble-status.tsx
+index 0762548..7b89070 100644
+--- a/src/app/ble-status.tsx
++++ b/src/app/ble-status.tsx
+@@ -167,7 +167,7 @@ export default function BLEStatusScreen() {
+       <StatusBar barStyle="dark-content" />
+       <ScrollView
+         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 60, paddingTop: 60 }}
+-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#06b6d4" />}
++        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#06b6d4" colors={['#06b6d4']} />}
+       >
+         {/* Back */}
+         <TouchableOpacity onPress={() => router.back()} className="mb-6 flex-row items-center" activeOpacity={0.7}>
+diff --git a/src/app/create-community-post.tsx b/src/app/create-community-post.tsx
+index 2a632f9..40754b4 100644
+--- a/src/app/create-community-post.tsx
++++ b/src/app/create-community-post.tsx
+@@ -182,7 +182,7 @@ export default function CreateCommunityPostScreen() {
+         style={styles.scrollView}
+         contentContainerStyle={[
+           styles.scroll,
+-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 48 },
++          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 120 },
+         ]}
+         keyboardShouldPersistTaps="handled"
+         showsVerticalScrollIndicator={false}
+diff --git a/src/app/finder-connect.tsx b/src/app/finder-connect.tsx
+index fed3a1e..ae4de05 100644
+--- a/src/app/finder-connect.tsx
++++ b/src/app/finder-connect.tsx
+@@ -3,6 +3,7 @@ import {
+   View, Text, TouchableOpacity, TextInput, Alert, ScrollView,
+   ActivityIndicator, Animated, StatusBar, Linking, KeyboardAvoidingView, Platform,
+ } from 'react-native';
++import { useSafeAreaInsets } from 'react-native-safe-area-context';
+ import { useLocalSearchParams, useRouter } from 'expo-router';
+ import { supabase } from '../lib/supabase';
+ import { useAuthStore } from '../stores/authStore';
+@@ -18,6 +19,7 @@ export default function FinderConnectScreen() {
+     item_name: string;
+   }>();
+   const router = useRouter();
++  const insets = useSafeAreaInsets();
+   const { user } = useAuthStore();
+ 
+   const [step, setStep] = useState<Step>('confirm');
+@@ -160,7 +162,7 @@ export default function FinderConnectScreen() {
+       <View className="flex-1 bg-slate-50">
+         <StatusBar barStyle="dark-content" />
+         <ScrollView
+-          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 64, paddingBottom: 48 }}
++          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 64, paddingBottom: insets.bottom + 120 }}
+           keyboardShouldPersistTaps="handled"
+         >
+           {/* Back */}
+diff --git a/src/app/group-requests/[id].tsx b/src/app/group-requests/[id].tsx
+index 916b4a2..594c33c 100644
+--- a/src/app/group-requests/[id].tsx
++++ b/src/app/group-requests/[id].tsx
+@@ -19,14 +19,14 @@ export default function GroupRequestsScreen() {
+   const fetchRequests = async () => {
+     const { data } = await supabase
+       .from('group_members')
+-      .select('*, user:user_id(name, email)')
++      .select('*, user:user_id(full_name, email)')
+       .eq('group_id', id)
+       .eq('status', 'pending');
+       
+     if (data) {
+       const formatted = data.map(r => ({
+         ...r,
+-        user_name: r.user?.name || r.user?.email?.split('@')[0] || 'Unknown User'
++        user_name: r.user?.full_name || r.user?.email?.split('@')[0] || 'Unknown User'
+       }));
+       setRequests(formatted);
+     }
+diff --git a/src/app/item-tracking/[id].tsx b/src/app/item-tracking/[id].tsx
+index 742cb40..72bada7 100644
+--- a/src/app/item-tracking/[id].tsx
++++ b/src/app/item-tracking/[id].tsx
+@@ -202,7 +202,7 @@ export default function ItemTrackingScreen() {
+ 
+       <ScrollView
+         className="flex-1"
+-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#06b6d4" />}
++        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#06b6d4" colors={['#06b6d4']} />}
+       >
+         {/* Map */}
+         <View style={{ height: 320 }}>
+diff --git a/src/app/join-community.tsx b/src/app/join-community.tsx
+new file mode 100644
+index 0000000..9cbd9c1
+--- /dev/null
++++ b/src/app/join-community.tsx
+@@ -0,0 +1,156 @@
++import { useEffect, useState } from 'react';
++import {
++  View, Text, TextInput, TouchableOpacity, FlatList,
++  ActivityIndicator, Alert, StyleSheet, StatusBar,
++} from 'react-native';
++import { useRouter } from 'expo-router';
++import { useSafeAreaInsets } from 'react-native-safe-area-context';
++import { supabase } from '../lib/supabase';
++import { useAuthStore } from '../stores/authStore';
++
++// For users whose email domain didn't auto-match an official community
++// (personal email providers, or an institutional domain we haven't seen yet).
++// They search existing official communities and join directly, since
++// community_groups.type defaults to 'public'.
++
++type OfficialGroup = { id: string; name: string; description: string | null; member_count: number };
++
++export default function JoinCommunityScreen() {
++  const router = useRouter();
++  const insets = useSafeAreaInsets();
++  const { user } = useAuthStore();
++
++  const [query, setQuery] = useState('');
++  const [results, setResults] = useState<OfficialGroup[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [joiningId, setJoiningId] = useState<string | null>(null);
++
++  useEffect(() => {
++    searchGroups('');
++  }, []);
++
++  const searchGroups = async (q: string) => {
++    setLoading(true);
++    let req = supabase
++      .from('community_groups')
++      .select('id, name, description, member_count')
++      .eq('is_official', true)
++      .order('member_count', { ascending: false })
++      .limit(30);
++
++    if (q.trim()) req = req.ilike('name', `%${q.trim()}%`);
++
++    const { data, error } = await req;
++    if (!error && data) setResults(data as OfficialGroup[]);
++    setLoading(false);
++  };
++
++  const handleJoin = async (group: OfficialGroup) => {
++    if (!user) return;
++    setJoiningId(group.id);
++    try {
++      const { data: profile } = await supabase
++        .from('users').select('id').eq('auth_id', user.id).single();
++      if (!profile) throw new Error('Profile not found');
++
++      const { error } = await supabase
++        .from('group_members')
++        .insert({ group_id: group.id, user_id: profile.id, role: 'member', status: 'active' });
++
++      if (error && error.code !== '23505') throw error; // 23505 = already a member
++
++      await supabase.rpc('increment_group_members', { g_id: group.id }).catch(() => {});
++      router.replace(`/group/${group.id}`);
++    } catch (e: any) {
++      Alert.alert('Couldn\u2019t join', e.message ?? 'Please try again.');
++    } finally {
++      setJoiningId(null);
++    }
++  };
++
++  return (
++    <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
++      <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
++
++      <TouchableOpacity onPress={() => router.back()} style={styles.back} activeOpacity={0.7}>
++        <Text style={styles.backArrow}>\u2190</Text>
++      </TouchableOpacity>
++
++      <Text style={styles.title}>Find Your Community</Text>
++      <Text style={styles.subtitle}>
++        We couldn\u2019t auto-detect your college from your email. Search for it below \u2014
++        if it doesn\u2019t exist yet, create it and you\u2019ll be its first member.
++      </Text>
++
++      <TextInput
++        style={styles.search}
++        placeholder="Search by college or university name"
++        placeholderTextColor="#94a3b8"
++        value={query}
++        onChangeText={(t) => { setQuery(t); searchGroups(t); }}
++      />
++
++      {loading ? (
++        <ActivityIndicator style={{ marginTop: 40 }} size="large" color="#6366f1" />
++      ) : (
++        <FlatList
++          data={results}
++          keyExtractor={(g) => g.id}
++          contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
++          renderItem={({ item }) => (
++            <View style={styles.card}>
++              <View style={{ flex: 1 }}>
++                <Text style={styles.cardTitle}>{item.name}</Text>
++                <Text style={styles.cardMeta}>{item.member_count} members</Text>
++              </View>
++              <TouchableOpacity
++                style={styles.joinBtn}
++                disabled={joiningId === item.id}
++                onPress={() => handleJoin(item)}
++                activeOpacity={0.8}
++              >
++                {joiningId === item.id
++                  ? <ActivityIndicator color="#fff" size="small" />
++                  : <Text style={styles.joinBtnText}>Join</Text>}
++              </TouchableOpacity>
++            </View>
++          )}
++          ListEmptyComponent={
++            <View style={styles.empty}>
++              <Text style={styles.emptyTitle}>No matching community</Text>
++              <Text style={styles.emptySubtitle}>
++                Ask a friend at your college to sign up first \u2014 official communities
++                are created automatically from a college email address.
++              </Text>
++            </View>
++          }
++        />
++      )}
++    </View>
++  );
++}
++
++const styles = StyleSheet.create({
++  container: { flex: 1, backgroundColor: '#f8fafc', paddingHorizontal: 20 },
++  back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
++  backArrow: { fontSize: 22, color: '#0f172a' },
++  title: { fontSize: 26, fontWeight: '900', color: '#0f172a', marginTop: 8 },
++  subtitle: { fontSize: 14, color: '#64748b', lineHeight: 20, marginTop: 6, marginBottom: 20 },
++  search: {
++    backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14,
++    fontSize: 15, color: '#0f172a', marginBottom: 16,
++    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
++  },
++  card: {
++    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
++    borderRadius: 18, padding: 16, marginBottom: 12,
++    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
++  },
++  cardTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
++  cardMeta: { fontSize: 13, color: '#94a3b8', marginTop: 2 },
++  joinBtn: { backgroundColor: '#6366f1', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 18 },
++  joinBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
++  empty: { alignItems: 'center', marginTop: 60, paddingHorizontal: 20 },
++  emptyTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a', marginBottom: 6 },
++  emptySubtitle: { fontSize: 13, color: '#94a3b8', textAlign: 'center', lineHeight: 19 },
++});
+diff --git a/supabase/config.toml b/supabase/config.toml
+index 82ab37a..26acef7 100644
+--- a/supabase/config.toml
++++ b/supabase/config.toml
+@@ -405,6 +405,11 @@ s3_secret_key = "env(S3_SECRET_KEY)"
+ # JSON string passed through to pg-delta SQL formatting.
+ # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+ 
++[functions.deep-link]
++enabled = true
++verify_jwt = false
++entrypoint = "./functions/deep-link/index.ts"
++
+ [functions.smart-match]
+ enabled = true
+ verify_jwt = true
+diff --git a/supabase/migrations/010_community_domain_autocreate.sql b/supabase/migrations/010_community_domain_autocreate.sql
+new file mode 100644
+index 0000000..fc0fb86
+--- /dev/null
++++ b/supabase/migrations/010_community_domain_autocreate.sql
+@@ -0,0 +1,112 @@
++-- Migration 010: Official (university) communities vs. user-created sub-groups
++-- Fixes the schema gap where community_groups had no way to distinguish
++-- an auto-created university-level community from a user-made sub-group.
++
++-- 1. New columns on community_groups
++ALTER TABLE community_groups ADD COLUMN IF NOT EXISTS domain TEXT;
++ALTER TABLE community_groups ADD COLUMN IF NOT EXISTS is_official BOOLEAN NOT NULL DEFAULT false;
++ALTER TABLE community_groups ADD COLUMN IF NOT EXISTS parent_group_id UUID REFERENCES community_groups(id) ON DELETE SET NULL;
++
++-- Only one official community per domain. Sub-groups (parent_group_id set,
++-- is_official = false) are unaffected since domain will be NULL for them.
++CREATE UNIQUE INDEX IF NOT EXISTS community_groups_domain_unique
++  ON community_groups(domain) WHERE domain IS NOT NULL;
++
++-- 2. Optional "pretty name" lookup for known institutions.
++-- If a domain isn't listed here, the trigger below falls back to
++-- title-casing the domain itself (e.g. "xyz.edu.in" -> "Xyz Community").
++CREATE TABLE IF NOT EXISTS college_domains (
++  domain        TEXT PRIMARY KEY,
++  display_name  TEXT NOT NULL
++);
++
++-- Seed your known domain. Replace with Bennett's actual student email domain.
++INSERT INTO college_domains (domain, display_name)
++VALUES ('bennett.edu.in', 'Bennett University')
++ON CONFLICT (domain) DO NOTHING;
++
++-- 3. Extend the existing signup trigger to auto-join/auto-create
++-- the official community for institutional email domains.
++-- Personal email providers (gmail, yahoo, etc.) are skipped —
++-- those users land in the app with no community and use the
++-- "Join a Community" screen instead.
++CREATE OR REPLACE FUNCTION public.handle_new_user()
++RETURNS trigger AS $$
++DECLARE
++  v_user_id     UUID;
++  v_domain      TEXT;
++  v_group_id    UUID;
++  v_display     TEXT;
++  v_is_personal BOOLEAN;
++BEGIN
++  INSERT INTO public.users (auth_id, full_name, email)
++  VALUES (
++    NEW.id,
++    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
++    NEW.email
++  )
++  ON CONFLICT (auth_id) DO NOTHING
++  RETURNING id INTO v_user_id;
++
++  -- If the row already existed (rare re-fire), fetch its id instead.
++  IF v_user_id IS NULL THEN
++    SELECT id INTO v_user_id FROM public.users WHERE auth_id = NEW.id;
++  END IF;
++
++  v_domain := lower(split_part(NEW.email, '@', 2));
++
++  v_is_personal := v_domain = ANY (ARRAY[
++    'gmail.com','yahoo.com','yahoo.co.in','outlook.com','hotmail.com',
++    'icloud.com','protonmail.com','live.com','rediffmail.com','aol.com'
++  ]);
++
++  IF v_domain IS NOT NULL AND v_domain <> '' AND NOT v_is_personal THEN
++    SELECT id INTO v_group_id
++    FROM community_groups
++    WHERE domain = v_domain AND is_official = true
++    LIMIT 1;
++
++    IF v_group_id IS NULL THEN
++      SELECT display_name INTO v_display FROM college_domains WHERE domain = v_domain;
++      IF v_display IS NULL THEN
++        v_display := initcap(split_part(v_domain, '.', 1)) || ' Community';
++      END IF;
++
++      INSERT INTO community_groups (name, description, creator_id, type, domain, is_official, member_count)
++      VALUES (v_display, 'Official community for ' || v_domain, v_user_id, 'public', v_domain, true, 0)
++      ON CONFLICT (domain) DO NOTHING
++      RETURNING id INTO v_group_id;
++
++      -- Race: another signup from the same domain created it first.
++      IF v_group_id IS NULL THEN
++        SELECT id INTO v_group_id
++        FROM community_groups
++        WHERE domain = v_domain AND is_official = true
++        LIMIT 1;
++      END IF;
++    END IF;
++
++    INSERT INTO group_members (group_id, user_id, role, status)
++    VALUES (v_group_id, v_user_id, 'member', 'active')
++    ON CONFLICT (group_id, user_id) DO NOTHING;
++
++    UPDATE community_groups SET member_count = member_count + 1 WHERE id = v_group_id;
++  END IF;
++
++  RETURN NEW;
++END;
++$$ LANGUAGE plpgsql SECURITY DEFINER;
++
++-- 4. RLS: everyone can browse official communities to find/join theirs.
++DROP POLICY IF EXISTS "official_groups_public_read" ON community_groups;
++CREATE POLICY "official_groups_public_read" ON community_groups
++  FOR SELECT USING (is_official = true OR type = 'public');
++
++-- 5. Missing RPC used by group-requests and join-community screens —
++-- never existed in any prior migration, calls were silently failing.
++CREATE OR REPLACE FUNCTION public.increment_group_members(g_id UUID)
++RETURNS void AS $$
++BEGIN
++  UPDATE community_groups SET member_count = member_count + 1 WHERE id = g_id;
++END;
++$$ LANGUAGE plpgsql SECURITY DEFINER;

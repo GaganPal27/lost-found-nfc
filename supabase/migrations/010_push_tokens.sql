@@ -34,8 +34,8 @@ CREATE INDEX IF NOT EXISTS idx_users_push_token
 DROP POLICY IF EXISTS "users_update_own_push_token" ON public.users;
 CREATE POLICY "users_update_own_push_token" ON public.users
   FOR UPDATE
-  USING (auth.uid() = id)       -- the user can only update their own row
-  WITH CHECK (auth.uid() = id); -- and cannot change it to someone else's row
+  USING (auth.uid() = auth_id)       -- the user can only update their own row
+  WITH CHECK (auth.uid() = auth_id); -- and cannot change it to someone else's row
 
 -- ============================================================
 -- Notes for the Edge Function (notify-lost-item-radius):

@@ -146,7 +146,7 @@ export default function ItemCard({ item }: { item: Item }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 7 }}>
             {item.last_seen_at ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10b981', marginRight: 6 }} />
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#6366f1', marginRight: 6 }} />
                 <Text style={{ color: '#64748b', fontSize: 11, fontWeight: '500' }} numberOfLines={1}>
                   Seen {new Date(item.last_seen_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                   {' '}· {(item as any).last_seen_location ?? ''}

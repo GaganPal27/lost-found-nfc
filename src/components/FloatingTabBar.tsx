@@ -14,6 +14,18 @@ export const TAB_ROUTES = [
   { name: 'my-items',  iconName: 'tag' as const,    label: 'Tags' },
 ];
 
+// Shared helper so any scroll screen can compute exactly how much
+// paddingBottom it needs to clear the floating tab bar + system nav pill.
+// 160px is the safe total: ~56px bar content + 24px padding + 80px safety margin
+// for gesture nav pill on any Android device, even if insets report 0.
+export function useTabBarClearance() {
+  const insets = useSafeAreaInsets();
+  // Use actual insets when available (usually 28–44px on modern Android),
+  // or fall back to 80px safety margin so the bar is always fully cleared.
+  const gestureNavHeight = Math.max(insets.bottom, 80);
+  return gestureNavHeight + 80; // 80px for bar content + breathing room
+}
+
 interface FloatingTabBarProps {
   activeRoute: string;
   onTabPress: (route: string) => void;
@@ -24,12 +36,16 @@ export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabB
   const router = useRouter();
   const [showPostModal, setShowPostModal] = useState(false);
 
-  const navHeight = insets.bottom > 0 ? insets.bottom + 56 : 70;
+  // Aggressive safe margin: never let the bar sit closer than 24px to the
+  // bottom edge, and always clear the Android gesture/nav pill by 12px on
+  // top of whatever insets.bottom reports.
+  const bottomPad = Math.max(insets.bottom + 12, 24);
+  const navHeight = bottomPad + 56;
 
   return (
     <>
       {/* ── Bottom Nav Bar ─────────────────────────────────────────────── */}
-      <View style={[styles.bar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}>
+      <View style={[styles.bar, { paddingBottom: bottomPad }]}>
         {/* Home */}
         <TabItem
           iconName="home"

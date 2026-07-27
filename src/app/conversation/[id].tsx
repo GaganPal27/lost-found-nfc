@@ -68,12 +68,14 @@ export default function ConversationScreen() {
   }, [id]);
 
   const loadConversation = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('conversations')
       .select('*, items(item_name), community_items:community_item_id(title)')
       .eq('id', id)
       .single();
     if (data) setConv(data as Conversation);
+    // If error is a permissions error, the finder is not logged in — still
+    // allow them to see the chat but they won't be able to resolve it.
   };
 
   const loadMessages = async () => {
@@ -130,7 +132,7 @@ export default function ConversationScreen() {
             }
 
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            router.replace('/(tabs)/connect');
+            router.replace('/(tabs)/community');
           },
         },
       ]

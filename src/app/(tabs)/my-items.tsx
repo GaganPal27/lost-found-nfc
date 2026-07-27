@@ -9,6 +9,7 @@ import { PLAN_LIMITS } from '../../lib/constants';
 import ItemCard from '../../components/ItemCard';
 import { supabase } from '../../lib/supabase';
 import { Feather } from '@expo/vector-icons';
+import { useTabBarClearance } from '../../components/FloatingTabBar';
 
 export default function MyItemsScreen() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function MyItemsScreen() {
   const { items, itemsCount, fetchMyItems, subscribeToItems, unsubscribeFromItems } = useItemStore();
   const { tier } = useSubscriptionStore();
   const [refreshing, setRefreshing] = useState(false);
+  const tabBarClearance = useTabBarClearance();
   const headerY = useRef(new Animated.Value(-20)).current;
   const headerOp = useRef(new Animated.Value(0)).current;
 
@@ -52,7 +54,6 @@ export default function MyItemsScreen() {
             <View>
               <Text style={styles.headerSub}>Lost & Found Network</Text>
               <Text style={styles.headerTitle}>My Items</Text>
-              <Text style={{ fontSize: 10, color: 'red', marginTop: 4 }}>DEBUG URL: {process.env.EXPO_PUBLIC_SUPABASE_URL}</Text>
             </View>
 
             {/* Settings icon */}
@@ -99,7 +100,7 @@ export default function MyItemsScreen() {
         data={items}
         keyExtractor={i => i.id}
         renderItem={({ item }) => <ItemCard item={item} />}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: tabBarClearance }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); if (user?.id) await fetchMyItems(user.id); setRefreshing(false); }} tintColor="#6366f1" colors={['#6366f1']} />}
         ListEmptyComponent={
           <View style={styles.empty}>

@@ -262,7 +262,7 @@ export default function AdminDashboard() {
 
       {/* Stats */}
       <View style={{ flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 16, gap: 10 }}>
-        {[{ l: 'Users', v: users.length, c: '#0f172a' }, { l: 'Items', v: enriched.length, c: '#e11d48' }, { l: 'Located', v: enriched.filter(i => i.last_seen_lat).length, c: '#10b981' }].map(st => (
+        {[{ l: 'Users', v: users.length, c: '#0f172a' }, { l: 'Items', v: enriched.length, c: '#e11d48' }, { l: 'Located', v: enriched.filter(i => i.last_seen_lat).length, c: '#6366f1' }].map(st => (
           <View key={st.l} style={s.statCard}><Text style={[s.statNum, { color: st.c }]}>{st.v}</Text><Text style={s.statLabel}>{st.l}</Text></View>
         ))}
       </View>

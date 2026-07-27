@@ -6,6 +6,7 @@ import { useSubscriptionStore } from '../stores/subscriptionStore';
 import { useItemStore } from '../stores/itemStore';
 import { PLAN_LIMITS } from '../lib/constants';
 import { supabase } from '../lib/supabase';
+import { useTabBarClearance } from '../components/FloatingTabBar';
 
 
 const PLAN_FEATURES = {
@@ -19,6 +20,7 @@ export default function ProfileScreen() {
   const { tier } = useSubscriptionStore();
   const { itemsCount } = useItemStore();
   const router = useRouter();
+  const tabBarClearance = useTabBarClearance();
 
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState('');
@@ -118,7 +120,7 @@ export default function ProfileScreen() {
   return (
     <View className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 160 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: tabBarClearance }}>
         {/* Header */}
         <View className="px-6 pt-14 pb-6 flex-row justify-between items-center">
           <Text className="text-slate-900 text-2xl font-black">Profile</Text>

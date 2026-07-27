@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, Animated, StatusBar, ScrollView } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 
@@ -55,6 +56,27 @@ export default function LoginScreen() {
   return (
     <View className="flex-1 bg-darkBg">
       <StatusBar barStyle="dark-content" />
+
+      {/* Colorful mesh gradient blobs — subtle, sit behind everything */}
+      <View style={{ position: 'absolute', top: -80, left: -60, width: 260, height: 260 }} pointerEvents="none">
+        <LinearGradient
+          colors={['rgba(99,102,241,0.16)', 'rgba(99,102,241,0)']}
+          style={{ flex: 1, borderRadius: 130 }}
+        />
+      </View>
+      <View style={{ position: 'absolute', top: 120, right: -90, width: 240, height: 240 }} pointerEvents="none">
+        <LinearGradient
+          colors={['rgba(236,72,153,0.14)', 'rgba(236,72,153,0)']}
+          style={{ flex: 1, borderRadius: 120 }}
+        />
+      </View>
+      <View style={{ position: 'absolute', bottom: -60, left: 20, width: 200, height: 200 }} pointerEvents="none">
+        <LinearGradient
+          colors={['rgba(139,92,246,0.13)', 'rgba(139,92,246,0)']}
+          style={{ flex: 1, borderRadius: 100 }}
+        />
+      </View>
+
       <KeyboardAwareScrollView
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48 }}
         keyboardShouldPersistTaps="handled"
@@ -84,7 +106,10 @@ export default function LoginScreen() {
         </Text>
 
         {/* Form Card */}
-        <View className="w-full bg-white border border-slate-200 rounded-3xl p-6 mb-4 shadow-sm">
+        <View
+          className="w-full bg-white border border-slate-200 rounded-3xl p-6 mb-4"
+          style={{ shadowColor: '#6366f1', shadowOpacity: 0.12, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 6 }}
+        >
           {/* Email */}
           <Text className="text-slate-500 text-xs uppercase tracking-wider mb-2 font-bold select-none">Email</Text>
           <View className="flex-row items-center bg-darkBg border border-slate-100 rounded-2xl px-4 mb-4 shadow-sm">

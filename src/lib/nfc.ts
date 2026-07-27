@@ -35,57 +35,69 @@ export const readAnyTag = async (): Promise<NfcReadResult> => {
   let url: string | null = null;
   let hardwareId: string | null = null;
 
+  // ── Attempt 1: request NDEF in isolation ──────────────────────────────────
+  // Requesting an array of multiple tech types (as before) lets Android pick
+  // ANY of them to establish the session — on some devices/tags it picks
+  // NfcA instead of Ndef, and tag.ndefMessage comes back empty even though
+  // the tag genuinely has a URL written to it. Asking for Ndef alone first
+  // guarantees we get the NDEF message when the tag actually has one.
   try {
-    // Request NDEF first — works for our programmed stickers
-    // If the tag is read-only / non-NDEF, this will throw and we fall through
-    await NfcManager.requestTechnology([
-      NfcTech.Ndef,
-      NfcTech.NfcA,
-      NfcTech.NfcB,
-      NfcTech.NfcF,
-      NfcTech.NfcV,
-      NfcTech.IsoDep,
-      NfcTech.MifareClassic,
-      NfcTech.MifareUltralight,
-    ] as any);
-
+    await NfcManager.requestTechnology(NfcTech.Ndef);
     const tag: TagEvent | null = await NfcManager.getTag();
 
-    if (tag) {
-      // Extract hardware UID — always present regardless of tag type
-      if (tag.id) {
-        if (Array.isArray(tag.id)) {
-          // byte array → hex string e.g. "04A1B2C3D4E5F6"
-          hardwareId = (tag.id as number[])
-            .map((b) => b.toString(16).padStart(2, '0'))
-            .join('')
-            .toUpperCase();
-        } else if (typeof tag.id === 'string') {
-          hardwareId = tag.id.toUpperCase();
-        }
-      }
-
-      // Try to extract NDEF URL
-      if (tag.ndefMessage && tag.ndefMessage.length > 0) {
-        try {
-          const record = tag.ndefMessage[0];
-          const decoded = Ndef.uri.decodePayload(
-            new Uint8Array(record.payload as number[])
-          );
-          if (decoded) url = decoded;
-        } catch (_) {
-          // Not a URI record — ignore
-        }
+    if (tag?.id) {
+      hardwareId = extractHardwareId(tag.id);
+    }
+    if (tag?.ndefMessage && tag.ndefMessage.length > 0) {
+      try {
+        const record = tag.ndefMessage[0];
+        const decoded = Ndef.uri.decodePayload(new Uint8Array(record.payload as number[]));
+        if (decoded) url = decoded;
+      } catch (_) {
+        // Not a URI record — ignore
       }
     }
   } catch (ex) {
-    console.warn('NFC Read Error:', ex);
+    // Tag doesn't support pure Ndef tech (or read failed) — fall through
+    // to the broader multi-tech attempt below for hardwareId-only tags.
   } finally {
-    NfcManager.cancelTechnologyRequest();
+    NfcManager.cancelTechnologyRequest().catch(() => {});
+  }
+
+  // ── Attempt 2: broader multi-tech request, only if attempt 1 got nothing ──
+  // Covers blank/non-NDEF tags and cards (metro cards, etc.) where we only
+  // need the hardware UID, not a URL.
+  if (!url && !hardwareId) {
+    try {
+      await NfcManager.requestTechnology([
+        NfcTech.NfcA,
+        NfcTech.NfcB,
+        NfcTech.NfcF,
+        NfcTech.NfcV,
+        NfcTech.IsoDep,
+        NfcTech.MifareClassic,
+        NfcTech.MifareUltralight,
+      ] as any);
+
+      const tag: TagEvent | null = await NfcManager.getTag();
+      if (tag?.id) hardwareId = extractHardwareId(tag.id);
+    } catch (ex) {
+      console.warn('NFC Read Error:', ex);
+    } finally {
+      NfcManager.cancelTechnologyRequest().catch(() => {});
+    }
   }
 
   return { url, hardwareId };
 };
+
+function extractHardwareId(id: TagEvent['id']): string | null {
+  if (Array.isArray(id)) {
+    return (id as number[]).map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+  }
+  if (typeof id === 'string') return id.toUpperCase();
+  return null;
+}
 
 // ─── Link an existing NFC card by reading its hardware UID only ──────────────
 // Used during item registration "Link Existing Card" flow.

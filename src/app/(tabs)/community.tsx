@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTabBarClearance } from '../../components/FloatingTabBar';
 import { Feather } from '@expo/vector-icons';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -68,22 +69,20 @@ function PostCard({
 
   const handleShare = async () => {
     try {
-      const link = `https://pzhuszyyykususkmzpud.supabase.co/functions/v1/deep-link?type=post&id=${post.id}`;
+      const link = `https://keepr.dpdns.org/p/${post.id}`;
       await Share.share({
         message: isLost
-          ? `🚨 Help find: *${post.title}* (${post.category})\n\n${post.description ?? ''}\n\nTap to view details on Poki:\n${link}`
-          : `📦 Found: *${post.title}* near ${post.location_label ?? 'nearby'}\n\n${post.description ?? ''}\n\nTap to view details on Poki:\n${link}`,
+          ? `🚨 Help find: *${post.title}* (${post.category})\n\n${post.description ?? ''}\n\nView on Keepr:\n${link}`
+          : `📦 Found: *${post.title}* near ${post.location_label ?? 'nearby'}\n\n${post.description ?? ''}\n\nView on Keepr:\n${link}`,
       });
     } catch {}
   };
 
   const handleWhatsApp = () => {
-    // Generate a deep link for this post
-    const link = `https://pzhuszyyykususkmzpud.supabase.co/functions/v1/deep-link?type=post&id=${post.id}`;
-    const msg = isLost 
-      ? `🚨 Lost: *${post.title}* (${post.category})\n${post.description ?? ''}\n\nTap to view details on Poki:\n${link}`
-      : `📦 Found: *${post.title}* near ${post.location_label ?? 'nearby'}\n${post.description ?? ''}\n\nTap to view details on Poki:\n${link}`;
-    
+    const link = `https://keepr.dpdns.org/p/${post.id}`;
+    const msg = isLost
+      ? `🚨 Lost: *${post.title}* (${post.category})\n${post.description ?? ''}\n\nView on Keepr:\n${link}`
+      : `📦 Found: *${post.title}* near ${post.location_label ?? 'nearby'}\n${post.description ?? ''}\n\nView on Keepr:\n${link}`;
     Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`).catch(() =>
       Alert.alert('WhatsApp Not Available', 'Please install WhatsApp.')
     );
@@ -236,6 +235,7 @@ function GroupCard({ group, onPress }: { group: CommunityGroup; onPress: () => v
 export default function CommunityScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const tabBarClearance = useTabBarClearance();
   const { user } = useAuthStore();
   const { dbUser } = useAuthStore();
   const dbUserId = dbUser?.id ?? null;
@@ -516,7 +516,7 @@ export default function CommunityScreen() {
               onReport={handleReport}
             />
           )}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -546,7 +546,7 @@ export default function CommunityScreen() {
           renderItem={({ item }) => (
             <GroupCard group={item} onPress={() => handleGroupPress(item.id)} />
           )}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
           ListHeaderComponent={
             <View>
               <TouchableOpacity
@@ -648,9 +648,10 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     backgroundColor: '#ffffff',
-    marginHorizontal: 12, marginBottom: 10,
-    borderRadius: 16, overflow: 'hidden',
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3,
+    marginHorizontal: 12, marginBottom: 12,
+    borderRadius: 24, overflow: 'hidden',
+    shadowColor: '#6366f1', shadowOpacity: 0.1, shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 }, elevation: 4,
   },
   cardImg: { width: 100, height: 120 },
   cardImgFull: { width: '100%', height: '100%' },
@@ -692,7 +693,7 @@ const styles = StyleSheet.create({
   },
   waBtnText: { fontSize: 11, color: '#16a34a', fontWeight: '600' },
   resolveBtn: {
-    backgroundColor: '#10b981', borderRadius: 8,
+    backgroundColor: '#6366f1', borderRadius: 8,
     paddingHorizontal: 8, paddingVertical: 5,
   },
   resolveBtnText: { fontSize: 11, color: '#fff', fontWeight: '800' },
@@ -709,9 +710,10 @@ const styles = StyleSheet.create({
   groupCard: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#ffffff',
-    marginHorizontal: 12, marginBottom: 10, borderRadius: 16,
+    marginHorizontal: 12, marginBottom: 12, borderRadius: 24,
     padding: 14,
-    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
+    shadowColor: '#8b5cf6', shadowOpacity: 0.08, shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 }, elevation: 3,
   },
   groupAvatar: { width: 52, height: 52, borderRadius: 14 },
   groupAvatarPlaceholder: {

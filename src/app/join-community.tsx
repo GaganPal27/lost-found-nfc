@@ -73,7 +73,7 @@ export default function JoinCommunityScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
 
       <TouchableOpacity onPress={() => router.back()} style={styles.back} activeOpacity={0.7}>
-        <Text style={styles.backArrow}>\u2190</Text>
+        <Text style={styles.backArrow}>←</Text>
       </TouchableOpacity>
 
       <Text style={styles.title}>Find Your Community</Text>
@@ -119,7 +119,7 @@ export default function JoinCommunityScreen() {
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>No matching community</Text>
               <Text style={styles.emptySubtitle}>
-                Ask a friend at your college to sign up first \u2014 official communities
+                Ask a friend at your college to sign up first — official communities
                 are created automatically from a college email address.
               </Text>
             </View>

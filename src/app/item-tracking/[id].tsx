@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StatusBar, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Circle } from 'react-native-maps';
 import { supabase } from '../../lib/supabase';
 import { NETWORK_INFO, type NetworkType } from '../../lib/constants';
 
@@ -209,7 +209,6 @@ export default function ItemTrackingScreen() {
           {hasLocation ? (
             <MapView
               style={{ flex: 1 }}
-              provider={PROVIDER_GOOGLE}
               initialRegion={initialRegion}
               mapType="standard"
               customMapStyle={lightMapStyle}

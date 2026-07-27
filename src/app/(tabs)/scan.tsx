@@ -54,7 +54,7 @@ export default function ScanScreen() {
     try {
       const { url, hardwareId } = await readAnyTag();
       const lookupByUid = async (uid: string) => {
-        const { data } = await supabase.from('items').select('id,item_name,user_id,status').eq('nfc_uid', uid).neq('status', 'deleted').maybeSingle();
+        const { data } = await supabase.from('items').select('id,item_name,user_id,status,owner:users(auth_id)').eq('nfc_uid', uid).neq('status', 'deleted').maybeSingle();
         return data;
       };
       let item = null;
@@ -66,7 +66,7 @@ export default function ScanScreen() {
       if (!item && hardwareId) item = await lookupByUid(hardwareId);
       if (item) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.push({ pathname: '/finder-connect', params: { item_id: item.id, owner_id: item.user_id, item_name: item.item_name, nfc_uid: hardwareId || url } });
+        router.push({ pathname: '/finder-connect', params: { item_id: item.id, owner_id: item.owner?.auth_id ?? item.user_id, item_name: item.item_name, nfc_uid: hardwareId || url } });
       } else {
         Alert.alert('Not Registered', 'This tag is not in the Lost & Found Network.');
       }
@@ -161,9 +161,9 @@ export default function ScanScreen() {
     // Match both old format (/item/UUID) and new edge function format (?id=UUID or /i/UUID)
     const m = data.match(/[?&]id=([a-zA-Z0-9-]+)/) || data.match(/\/item\/([a-zA-Z0-9-]+)/) || data.match(/\/i\/([a-zA-Z0-9-]+)/);
     if (m?.[1]) {
-      const { data: item } = await supabase.from('items').select('id,item_name,user_id,status').eq('nfc_uid', m[1]).neq('status', 'deleted').maybeSingle();
+      const { data: item } = await supabase.from('items').select('id,item_name,user_id,status,owner:users(auth_id)').eq('nfc_uid', m[1]).neq('status', 'deleted').maybeSingle();
       if (item) {
-        router.push({ pathname: '/finder-connect', params: { item_id: item.id, owner_id: item.user_id, item_name: item.item_name, nfc_uid: m[1] } });
+        router.push({ pathname: '/finder-connect', params: { item_id: item.id, owner_id: item.owner?.auth_id ?? item.user_id, item_name: item.item_name, nfc_uid: m[1] } });
         return;
       }
     }

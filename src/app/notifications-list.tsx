@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, RefreshControl, Platform, UIManager, LayoutAnimation, StatusBar, Animated } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -75,6 +75,14 @@ export function NotificationsList() {
 
     return () => { supabase.removeChannel(sub); };
   }, [dbUser?.id]);
+
+  // Same fix as messages-list.tsx: refetch on every focus, not just first
+  // mount, so returning to this tab always shows current data.
+  useFocusEffect(
+    useCallback(() => {
+      if (dbUser?.id) fetchNotifs();
+    }, [dbUser?.id])
+  );
 
   const onRefresh = async () => { setRefreshing(true); await fetchNotifs(); setRefreshing(false); };
 

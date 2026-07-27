@@ -11,13 +11,9 @@ interface SubscriptionState {
 
 import { useAuthStore } from './authStore';
 
-// Safe tier refresh — works on web (no RevenueCat) and on native (with RevenueCat)
-async function safGetTier(): Promise<SubscriptionTier> {
-  // Implicitly grant Max tier to all admins
-  if (useAuthStore.getState().isAdmin) {
-    return 'max';
-  }
-
+// Raw RevenueCat entitlement fetch — no admin check, safe to call in parallel
+// with the session/role lookup instead of waiting for it to finish first.
+export async function getRawEntitlementTier(): Promise<SubscriptionTier> {
   try {
     // RevenueCat only works on native (iOS/Android)
     // On web or when not configured, it will throw — we catch and return 'basic'
@@ -26,6 +22,15 @@ async function safGetTier(): Promise<SubscriptionTier> {
   } catch {
     return 'basic';
   }
+}
+
+// Safe tier refresh — works on web (no RevenueCat) and on native (with RevenueCat)
+async function safGetTier(): Promise<SubscriptionTier> {
+  // Implicitly grant Max tier to all admins
+  if (useAuthStore.getState().isAdmin) {
+    return 'max';
+  }
+  return getRawEntitlementTier();
 }
 
 export const useSubscriptionStore = create<SubscriptionState>((set) => ({

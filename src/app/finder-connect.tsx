@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
+import * as Sentry from '@sentry/react-native';
 
 type Step = 'confirm' | 'location' | 'contact' | 'sent';
 
@@ -86,12 +87,24 @@ export default function FinderConnectScreen() {
 
     setLoading(true);
     try {
+      // owner_id (route param) is the profile-table id. conversations.owner_id
+      // and push_tokens.user_id both expect the AUTH id — a different UUID for
+      // the same person — so resolve it before using it anywhere below.
+      // Can't just SELECT the users row directly: own_user_read RLS correctly
+      // blocks reading anyone else's row, so this goes through a narrow
+      // SECURITY DEFINER function that exposes only the one UUID needed.
+      const { data: ownerAuthId, error: ownerErr } = await supabase
+        .rpc('get_user_auth_id', { profile_id: owner_id });
+      if (ownerErr || !ownerAuthId) {
+        throw new Error('Could not resolve item owner. Please try again.');
+      }
+
       // 1. Create conversation
       const { data: conv, error: convError } = await supabase
         .from('conversations')
         .insert({
           item_id,
-          owner_id,
+          owner_id: ownerAuthId,
           finder_user_id: user?.id ?? null,
           finder_name: finderName.trim(),
           finder_phone: finderPhone.trim() || null,
@@ -105,15 +118,16 @@ export default function FinderConnectScreen() {
       if (convError || !conv) throw convError ?? new Error('Could not create conversation');
 
       // 2. Insert initial message
-      await supabase.from('messages').insert({
+      const { error: msgError } = await supabase.from('messages').insert({
         conversation_id: conv.id,
         sender_id: user?.id ?? null,
         sender_name: finderName.trim(),
         body: message.trim(),
       });
+      if (msgError) Sentry.captureMessage(`finder-connect: message insert failed: ${msgError.message}`, 'warning');
 
       // 3. Insert in-app notification for the owner
-      await supabase.from('notifications').insert({
+      const { error: notifError } = await supabase.from('notifications').insert({
         user_id: owner_id,
         type: 'nfc_tap',
         message: `${finderName.trim()} found your "${item_name}"${locationLabel ? ` near ${locationLabel}` : ''}`,
@@ -126,17 +140,35 @@ export default function FinderConnectScreen() {
           lng: coords?.lng,
         },
       });
+      if (notifError) Sentry.captureMessage(`finder-connect: notification insert failed: ${notifError.message}`, 'warning');
 
-      // 4. Call push notification edge function
-      await supabase.functions.invoke('send-push-notification', {
+      // 4. Call push notification edge function (needs the AUTH id, like conversations.owner_id)
+      // This was previously fire-and-forget, so a failed/empty push (no token, Edge
+      // Function error, Expo API rejection) was invisible and the UI showed "Owner Notified!"
+      // regardless. Now the actual result is captured and sent to Sentry.
+      const { data: pushResult, error: pushError } = await supabase.functions.invoke('send-push-notification', {
         body: {
-          owner_id,
+          owner_id: ownerAuthId,
           conversation_id: conv.id,
+          item_id,
           item_name,
-          finder_name: finderName.trim(),
           location_label: locationLabel,
         },
       });
+
+      if (pushError) {
+        Sentry.captureMessage(`push notification failed: ${pushError.message}`, 'error');
+      } else {
+        Sentry.addBreadcrumb({
+          category: 'push',
+          message: 'send-push-notification result',
+          level: 'info',
+          data: { owner_id: ownerAuthId, result: pushResult },
+        });
+        if (pushResult?.message === 'No push token found for owner') {
+          Sentry.captureMessage(`No push token on file for owner_id ${ownerAuthId}`, 'warning');
+        }
+      }
 
       setConversationId(conv.id);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

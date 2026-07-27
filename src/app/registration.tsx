@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import * as Location from 'expo-location';
 import { updateUserLocation } from '../lib/location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RegistrationScreen() {
   const [name, setName] = useState('');
@@ -97,6 +98,42 @@ export default function RegistrationScreen() {
         consent_comms_at: consentComms ? now : null,
         age_declared_at: now,
       }, { onConflict: 'id' });
+
+      // Handle College Auto-Join
+      try {
+        const collegeId = await AsyncStorage.getItem('selectedCollegeId');
+        if (collegeId && collegeId !== 'other') {
+          const collegeName = await AsyncStorage.getItem('selectedCollegeName') || 'College Community';
+          
+          // Find existing group for this college
+          let { data: existingGroup } = await supabase.from('community_groups').select('id').eq('college_id', collegeId).single();
+          let groupId = existingGroup?.id;
+          
+          // If not found, create it
+          if (!groupId) {
+            const { data: newGroup } = await supabase.from('community_groups').insert({
+              name: collegeName,
+              is_official: true,
+              created_by: data.user.id,
+              college_id: collegeId
+            }).select('id').single();
+            groupId = newGroup?.id;
+          }
+
+          // Add user to the group
+          if (groupId) {
+            await supabase.from('group_members').insert({
+              group_id: groupId,
+              user_id: data.user.id,
+              role: 'member',
+              status: 'active'
+            });
+            await supabase.rpc('increment_group_members', { g_id: groupId }).catch(() => {});
+          }
+        }
+      } catch (collegeErr) {
+        console.warn('Failed to auto-join college community', collegeErr);
+      }
 
       // Request location permission only if user consented
       if (consentLocation) {
