@@ -33,10 +33,13 @@ jobs:
       - name: 📦 Install dependencies
         run: npm install
 
+      - name: 🛠 Configure Gradle Memory
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> ~/.gradle/gradle.properties
+
       - name: 🚀 Build APK locally on GitHub Runner
         run: npx eas-cli build -p android --profile preview --local --non-interactive --output ./app-release.apk
-        env:
-          _JAVA_OPTIONS: "-Xmx4096m -XX:MaxMetaspaceSize=1024m"
 
       - name: 📤 Upload APK Artifact
         uses: actions/upload-artifact@v4
