@@ -60,17 +60,35 @@ export default function PublicItemPage() {
         location_label: areaLabel,
       });
 
-      await supabase.from('notifications').insert({
-        user_id: item.user_id,
-        type: 'nfc_tap',
-        message: `Someone found your ${item.item_name} near ${areaLabel}`,
-        metadata: {
+      // Resolve auth UUID for push notification (item.user_id is profile UUID)
+      const { data: ownerAuthId } = await supabase.rpc('get_user_auth_id', { profile_id: item.user_id });
+
+      // Insert notification via SECURITY DEFINER function — bypasses RLS which only
+      // allows self-inserts (the finder/anonymous user is not the owner).
+      const { error: notifError } = await supabase.rpc('create_item_notification', {
+        p_owner_id: item.user_id,
+        p_type: 'nfc_tap',
+        p_message: `Someone found your ${item.item_name} near ${areaLabel}`,
+        p_metadata: {
           item_name: item.item_name,
           location: { lat: location.coords.latitude, lng: location.coords.longitude },
           scanned_at: new Date().toISOString(),
           location_label: `Near ${areaLabel}`,
         },
       });
+      if (notifError) console.error('[nfc_uid] notification failed:', notifError.message);
+
+      // Fire push notification to the owner (fire-and-forget — don't block setShared)
+      if (ownerAuthId) {
+        supabase.functions.invoke('send-push-notification', {
+          body: {
+            owner_id: ownerAuthId,
+            item_name: item.item_name,
+            finder_name: 'Someone',
+            location_label: areaLabel,
+          },
+        }).catch(e => console.warn('[nfc_uid] push invoke error:', e));
+      }
 
       setShared(true);
     } catch (e: any) {

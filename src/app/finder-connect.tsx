@@ -126,12 +126,14 @@ export default function FinderConnectScreen() {
       });
       if (msgError) Sentry.captureMessage(`finder-connect: message insert failed: ${msgError.message}`, 'warning');
 
-      // 3. Insert in-app notification for the owner
-      const { error: notifError } = await supabase.from('notifications').insert({
-        user_id: owner_id,
-        type: 'nfc_tap',
-        message: `${finderName.trim()} found your "${item_name}"${locationLabel ? ` near ${locationLabel}` : ''}`,
-        metadata: {
+      // 3. Insert in-app notification via SECURITY DEFINER function — bypasses RLS which
+      //    only allows self-inserts. A finder is a different auth identity from the owner.
+      //    p_owner_id accepts auth UUID; the function resolves to profile UUID internally.
+      const { error: notifError } = await supabase.rpc('create_item_notification', {
+        p_owner_id: ownerAuthId,
+        p_type: 'nfc_tap',
+        p_message: `${finderName.trim()} found your "${item_name}"${locationLabel ? ` near ${locationLabel}` : ''}`,
+        p_metadata: {
           item_id,
           conversation_id: conv.id,
           finder_name: finderName.trim(),
@@ -152,6 +154,7 @@ export default function FinderConnectScreen() {
           conversation_id: conv.id,
           item_id,
           item_name,
+          finder_name: finderName.trim(),
           location_label: locationLabel,
         },
       });
