@@ -54,7 +54,7 @@ export default function ScanScreen() {
     try {
       const { url, hardwareId } = await readAnyTag();
       const lookupByUid = async (uid: string) => {
-        const { data } = await supabase.from('items').select('id,item_name,user_id,status,owner:users(auth_id)').eq('nfc_uid', uid).neq('status', 'deleted').maybeSingle();
+        const { data } = await supabase.from('items').select('id,item_name,user_id,status').eq('nfc_uid', uid).neq('status', 'deleted').maybeSingle();
         return data;
       };
       let item = null;
@@ -66,7 +66,12 @@ export default function ScanScreen() {
       if (!item && hardwareId) item = await lookupByUid(hardwareId);
       if (item) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.push({ pathname: '/finder-connect', params: { item_id: item.id, owner_id: item.owner?.auth_id ?? item.user_id, item_name: item.item_name, nfc_uid: hardwareId || url } });
+        // Resolve the owner's auth UUID via SECURITY DEFINER RPC — the direct
+        // foreign key join (owner:users(auth_id)) fails because Supabase's schema
+        // cache has no FK between items.user_id and users.id, so item.owner is
+        // always null and we'd pass the wrong ID to finder-connect.
+        const { data: ownerAuthId } = await supabase.rpc('get_user_auth_id', { profile_id: item.user_id });
+        router.push({ pathname: '/finder-connect', params: { item_id: item.id, owner_id: ownerAuthId ?? item.user_id, item_name: item.item_name, nfc_uid: hardwareId || url } });
       } else {
         Alert.alert('Not Registered', 'This tag is not in the Lost & Found Network.');
       }
