@@ -47,7 +47,8 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.BLUETOOTH",
-        "android.permission.BLUETOOTH_ADMIN"
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "intentFilters": [
         {
@@ -72,7 +73,7 @@
     },
     "plugins": [
       "expo-router",
-
+      "expo-notifications",
       [
         "react-native-nfc-manager",
         {
