@@ -87,7 +87,7 @@ const safeStopBLE = async () => {
 };
 
 function RootLayout() {
-  const { session, initialized: authInitialized, setSession, dbUser } = useAuthStore();
+  const { session, initialized: authInitialized, setSession } = useAuthStore();
   const { refreshTier, initialized: subInitialized, tier } = useSubscriptionStore();
   const segments = useSegments();
   const router = useRouter();
@@ -227,15 +227,14 @@ function RootLayout() {
 
   // Set up Supabase realtime for in-app bubbles
   useEffect(() => {
-    const uid = useAuthStore.getState().dbUser?.id;
-    if (!uid) return;
+    if (!session?.user?.id) return;
     
-    const channel = supabase.channel(`notifications_${uid}`)
+    const channel = supabase.channel(`notifications_${session.user.id}`)
       .on('postgres_changes', { 
         event: 'INSERT', 
         schema: 'public', 
         table: 'notifications', 
-        filter: `user_id=eq.${uid}` 
+        filter: `user_id=eq.${session.user.id}` 
       }, (payload) => {
         const newNotif = payload.new as any;
         setBubbles(prev => {
@@ -253,7 +252,7 @@ function RootLayout() {
       .subscribe();
       
     return () => { supabase.removeChannel(channel); };
-  }, [dbUser?.id]);
+  }, [session?.user?.id]);
 
   const dismissBubble = (id: string) => {
     setBubbles(prev => prev.filter(b => b.id !== id));

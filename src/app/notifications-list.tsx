@@ -38,8 +38,8 @@ export function NotificationsList() {
   }, [hasUnreadScanned]);
 
   const fetchNotifs = async () => {
-    // Use dbUser.id (the users table PK) - NOT user.id (auth UUID)
-    const uid = dbUser?.id;
+    // The notifications table user_id references auth.users(id), so we must use the auth UUID.
+    const uid = user?.id;
     if (!uid) return;
     const { data } = await supabase
       .from('notifications')
@@ -55,11 +55,11 @@ export function NotificationsList() {
   const fadeIn = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!dbUser?.id) return;
+    if (!user?.id) return;
     Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     fetchNotifs();
 
-    const uid = dbUser.id;
+    const uid = user.id;
     const sub = supabase.channel(`notifs_screen_${uid}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` }, (payload) => {
         if (payload.new.type === 'nfc_tap') {
@@ -74,14 +74,14 @@ export function NotificationsList() {
       .subscribe();
 
     return () => { supabase.removeChannel(sub); };
-  }, [dbUser?.id]);
+  }, [user?.id]);
 
   // Same fix as messages-list.tsx: refetch on every focus, not just first
   // mount, so returning to this tab always shows current data.
   useFocusEffect(
     useCallback(() => {
-      if (dbUser?.id) fetchNotifs();
-    }, [dbUser?.id])
+      if (user?.id) fetchNotifs();
+    }, [user?.id])
   );
 
   const onRefresh = async () => { setRefreshing(true); await fetchNotifs(); setRefreshing(false); };
