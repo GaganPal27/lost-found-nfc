@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-  View, Text, Switch, TextInput, TouchableOpacity, Alert,
+  View, Text, TouchableOpacity, Alert,
   ActivityIndicator, ScrollView, StatusBar, StyleSheet, Image,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,12 +27,6 @@ export default function NotificationDetailScreen() {
   const [notification, setNotification] = useState<any>(null);
   const [loading, setLoading]           = useState(true);
 
-  // Original NFC scan return states
-  const [sharePhone, setSharePhone]                 = useState(false);
-  const [shareLiveLocation, setShareLiveLocation]   = useState(false);
-  const [message, setMessage]                       = useState('');
-  const [sending, setSending]                       = useState(false);
-
   // Community Claim states
   const [communityItem, setCommunityItem] = useState<any>(null);
   const [claimDetail, setClaimDetail]     = useState<any>(null);
@@ -48,10 +41,17 @@ export default function NotificationDetailScreen() {
           await supabase.from('notifications').update({ is_read: true }).eq('id', id);
         }
 
-        // Check if community claim
+        // ── NFC TAP: redirect straight to the real conversation ───────────
+        // The 'Coordinate Return' UI was a dead-end placeholder. The actual
+        // conversation is the source of truth for all owner<->finder chat.
+        if (data.type === 'nfc_tap' && data.metadata?.conversation_id) {
+          router.replace(`/conversation/${data.metadata.conversation_id}`);
+          return;
+        }
+
+        // ── Community claim: load item + claim details ─────────────────
         if (data.metadata?.community_item_id && data.metadata?.claimant_id) {
           try {
-            // Fetch community item
             const { data: item } = await supabase
               .from('community_items')
               .select('*')
@@ -59,7 +59,6 @@ export default function NotificationDetailScreen() {
               .single();
             if (item) setCommunityItem(item);
 
-            // Fetch claim details
             const { data: claim } = await supabase
               .from('community_claims')
               .select('*, claimant:claimant_id(email, name)')
@@ -77,23 +76,12 @@ export default function NotificationDetailScreen() {
     loadNotif();
   }, [id]);
 
-  // ── NFC Scan Sightings Return flow ────────────────────────────
-  const handleSendInfo = async () => {
-    setSending(true);
-    setTimeout(() => {
-      Alert.alert('✅ Information Shared', 'The finder has received your details.');
-      setSending(false);
-      router.back();
-    }, 1000);
-  };
-
   // ── Community Board Claim Review flow ─────────────────────────
   const handleApproveClaim = async () => {
     if (!communityItem || !claimDetail || !user) return;
     setActionLoading(true);
 
     try {
-      // 1. Get claimant's auth_id
       const { data: claimantUser, error: uErr } = await supabase
         .from('users')
         .select('auth_id')
@@ -104,11 +92,10 @@ export default function NotificationDetailScreen() {
         throw new Error('Claimant auth account not found.');
       }
 
-      // 2. Create new conversation
       const { data: conv, error: convErr } = await supabase
         .from('conversations')
         .insert({
-          owner_id:          claimantUser.auth_id, // claimant acts as the owner
+          owner_id:          claimantUser.auth_id,
           finder_user_id:    user.id,
           community_item_id: communityItem.id,
           resolved:          false,
@@ -118,7 +105,6 @@ export default function NotificationDetailScreen() {
 
       if (convErr) throw convErr;
 
-      // 3. Get finder's name
       const { data: finderProfile } = await supabase
         .from('users')
         .select('name')
@@ -126,7 +112,6 @@ export default function NotificationDetailScreen() {
         .single();
       const finderName = finderProfile?.name || 'Finder';
 
-      // 4. Send initial message
       const { error: msgErr } = await supabase
         .from('messages')
         .insert({
@@ -138,29 +123,25 @@ export default function NotificationDetailScreen() {
 
       if (msgErr) throw msgErr;
 
-      // 5. Update claim status to approved
       await supabase
         .from('community_claims')
         .update({ status: 'approved' })
         .eq('community_item_id', communityItem.id)
         .eq('claimant_id', claimDetail.claimant_id);
 
-      // 6. Reject all other claims
       await supabase
         .from('community_claims')
         .update({ status: 'rejected' })
         .eq('community_item_id', communityItem.id)
         .neq('claimant_id', claimDetail.claimant_id);
 
-      // 7. Mark item as claimed
       await supabase
         .from('community_items')
         .update({ status: 'claimed' })
         .eq('id', communityItem.id);
 
-      // 8. Notify claimant
       await supabase.from('notifications').insert({
-        user_id:  claimDetail.claimant_id,
+        user_id:  claimantUser.auth_id,
         type:     'message',
         message:  `Your claim for "${communityItem.title}" has been approved! Chat is now open.`,
         metadata: { conversation_id: conv.id },
@@ -182,14 +163,12 @@ export default function NotificationDetailScreen() {
     setActionLoading(true);
 
     try {
-      // 1. Update claim status
       await supabase
         .from('community_claims')
         .update({ status: 'rejected' })
         .eq('community_item_id', communityItem.id)
         .eq('claimant_id', claimDetail.claimant_id);
 
-      // 2. Notify claimant
       await supabase.from('notifications').insert({
         user_id:  claimDetail.claimant_id,
         type:     'message',
@@ -222,14 +201,13 @@ export default function NotificationDetailScreen() {
   const { metadata } = notification;
   const isCommunityClaim = !!(communityItem && claimDetail);
 
-  // ── RENDER 1: Community Claim Review Layout ────────────────────────
+  // ── RENDER 1: Community Claim Review ──────────────────────────────────
   if (isCommunityClaim) {
     const meta = CATEGORY_META[communityItem.category] || CATEGORY_META.Other;
     return (
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#f8f9ff" />
         <ScrollView contentContainerStyle={styles.scroll}>
-          {/* Back */}
           <TouchableOpacity onPress={() => router.back()} style={styles.back} activeOpacity={0.7}>
             <Text style={styles.backArrow}>←</Text>
             <Text style={styles.backLabel}>Activity</Text>
@@ -238,7 +216,6 @@ export default function NotificationDetailScreen() {
           <Text style={styles.pageSuper}>Claim Verification</Text>
           <Text style={styles.pageTitle}>Review Proof</Text>
 
-          {/* Item details */}
           <View style={styles.card}>
             <Text style={styles.label}>Found Item</Text>
             <View style={styles.itemRow}>
@@ -256,25 +233,20 @@ export default function NotificationDetailScreen() {
             </View>
           </View>
 
-          {/* Claimant details */}
           <View style={styles.card}>
             <Text style={styles.label}>Claimant</Text>
             <Text style={styles.detailTitle}>{claimDetail.claimant?.name || 'Anonymous User'}</Text>
             <Text style={styles.detailSub}>{claimDetail.claimant?.email || 'No email shared'}</Text>
           </View>
 
-          {/* Proof verification details */}
           <View style={[styles.card, styles.proofCard]}>
             <Text style={[styles.label, { color: '#7e22ce' }]}>Proof Question</Text>
             <Text style={styles.proofQuestion}>"{communityItem.proof_question}"</Text>
-
             <View style={styles.proofDivider} />
-
             <Text style={[styles.label, { color: '#7e22ce' }]}>Submitted Answer</Text>
             <Text style={styles.proofAnswer}>"{claimDetail.proof_answer}"</Text>
           </View>
 
-          {/* Actions */}
           {claimDetail.status === 'pending' ? (
             <View style={styles.actionRow}>
               <TouchableOpacity
@@ -311,28 +283,17 @@ export default function NotificationDetailScreen() {
     );
   }
 
-  // ── RENDER 2: NFC Scan Coordinate Return Layout ────────────────────
-  const canSend = sharePhone || shareLiveLocation || message.trim().length > 0;
+  // ── RENDER 2: NFC Scan fallback (no conversation_id — legacy notification) ─
+  // Modern notifications redirect to /conversation/[id] before reaching here.
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
-    >
-      <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f8f9ff" />
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-        {/* Back */}
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#f8f9ff" />
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back} activeOpacity={0.7}>
           <Text style={styles.backArrow}>←</Text>
           <Text style={styles.backLabel}>Activity</Text>
         </TouchableOpacity>
 
-        {/* Alert Banner */}
         <View style={styles.nfcBanner}>
           <View style={styles.nfcIconBox}>
             <Text style={{ fontSize: 24 }}>📱</Text>
@@ -343,101 +304,33 @@ export default function NotificationDetailScreen() {
           </View>
         </View>
 
-        <Text style={styles.pageTitle}>Coordinate Return</Text>
+        <Text style={styles.pageTitle}>Item Scanned</Text>
 
-        {/* Location */}
         <View style={styles.card}>
           <Text style={styles.label}>Scan Location</Text>
           <Text style={styles.detailTitle}>{metadata?.location_label || 'Unknown Area'}</Text>
-          {metadata?.scanned_at && (
-            <Text style={styles.detailSub}>
-              Scanned: {new Date(metadata.scanned_at).toLocaleString()}
+          <Text style={styles.detailSub}>{notification.message}</Text>
+        </View>
+
+        {metadata?.conversation_id ? (
+          <TouchableOpacity
+            style={styles.submitBtn}
+            onPress={() => router.push(`/conversation/${metadata.conversation_id}`)}
+            activeOpacity={0.85}
+          >
+            <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.submitGrad}>
+              <Text style={styles.submitText}>Open Chat with Finder →</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.card, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
+            <Text style={{ color: '#15803d', fontWeight: '700', textAlign: 'center' }}>
+              The finder will contact you using the details provided when registering.
             </Text>
-          )}
-        </View>
-
-        {/* Share Options */}
-        <View style={[styles.card, { padding: 0, overflow: 'hidden' }]}>
-          <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
-            <Text style={styles.label}>Share with Finder</Text>
           </View>
-
-          <TouchableOpacity
-            style={styles.toggleRow}
-            activeOpacity={0.7}
-            onPress={() => setSharePhone(!sharePhone)}
-          >
-            <View style={styles.toggleLeft}>
-              <Text style={{ fontSize: 20 }}>📞</Text>
-              <View>
-                <Text style={styles.toggleTitle}>Phone Number</Text>
-                <Text style={styles.toggleSub}>Finder can call you to arrange pickup</Text>
-              </View>
-            </View>
-            <Switch
-              value={sharePhone}
-              onValueChange={setSharePhone}
-              trackColor={{ true: '#6366f1', false: '#e2e8f0' }}
-              thumbColor={sharePhone ? '#ffffff' : '#f1f5f9'}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.toggleRow}
-            activeOpacity={0.7}
-            onPress={() => setShareLiveLocation(!shareLiveLocation)}
-          >
-            <View style={styles.toggleLeft}>
-              <Text style={{ fontSize: 20 }}>📍</Text>
-              <View>
-                <Text style={styles.toggleTitle}>Live Location</Text>
-                <Text style={styles.toggleSub}>Share your current location for meetup</Text>
-              </View>
-            </View>
-            <Switch
-              value={shareLiveLocation}
-              onValueChange={setShareLiveLocation}
-              trackColor={{ true: '#6366f1', false: '#e2e8f0' }}
-              thumbColor={shareLiveLocation ? '#ffffff' : '#f1f5f9'}
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Message */}
-        <View style={styles.messageField}>
-          <Text style={styles.label}>Message to Finder</Text>
-          <View style={styles.inputBox}>
-            <TextInput
-              style={styles.input}
-              multiline
-              textAlignVertical="top"
-              placeholder="e.g. Please leave it at the front desk of the library..."
-              placeholderTextColor="#94a3b8"
-              value={message}
-              onChangeText={setMessage}
-              numberOfLines={4}
-            />
-          </View>
-        </View>
-
-        {/* Send Button */}
-        <TouchableOpacity
-          style={[styles.submitBtn, (!canSend || sending) && { opacity: 0.4 }]}
-          disabled={!canSend || sending}
-          onPress={handleSendInfo}
-          activeOpacity={0.85}
-        >
-          <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.submitGrad}>
-            {sending ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.submitText}>Send to Finder →</Text>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
-        </ScrollView>
-      </View>
-    </KeyboardAvoidingView>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -461,7 +354,6 @@ const styles = StyleSheet.create({
   },
   label: { color: '#64748b', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
 
-  // Items info
   itemRow:   { flexDirection: 'row', alignItems: 'center', gap: 12 },
   itemImage: { width: 48, height: 48, borderRadius: 12 },
   catBox:    { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
@@ -471,18 +363,16 @@ const styles = StyleSheet.create({
   detailTitle: { color: '#0f172a', fontSize: 17, fontWeight: '800' },
   detailSub:   { color: '#64748b', fontSize: 12, fontWeight: '600', marginTop: 2 },
 
-  // Proof verification card
   proofCard:     { backgroundColor: '#faf5ff', borderColor: '#e9d5ff' },
   proofQuestion: { color: '#0f172a', fontSize: 15, fontWeight: '600', lineHeight: 22, fontStyle: 'italic', marginBottom: 12 },
   proofDivider:  { height: 1, backgroundColor: '#f3e8ff', marginVertical: 12 },
   proofAnswer:   { color: '#7e22ce', fontSize: 16, fontWeight: '700', lineHeight: 24 },
 
-  // Actions
-  actionRow:  { flexDirection: 'row', gap: 12, marginTop: 12 },
-  btn:        { flex: 1, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  btnReject:  { backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0' },
+  actionRow:     { flexDirection: 'row', gap: 12, marginTop: 12 },
+  btn:           { flex: 1, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  btnReject:     { backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0' },
   btnRejectText: { color: '#64748b', fontSize: 15, fontWeight: '800' },
-  btnApprove: { position: 'relative', shadowColor: '#6366f1', shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  btnApprove:    { position: 'relative', shadowColor: '#6366f1', shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
   btnApproveText: { color: '#ffffff', fontSize: 15, fontWeight: '800', zIndex: 1 },
 
   statusBanner:     { padding: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
@@ -490,20 +380,10 @@ const styles = StyleSheet.create({
   rejectedBanner:   { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca' },
   statusBannerText: { color: '#15803d', fontSize: 15, fontWeight: '800' },
 
-  // NFC coordinate return
   nfcBanner:      { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 20, padding: 16, marginBottom: 20 },
   nfcIconBox:     { width: 48, height: 48, borderRadius: 12, backgroundColor: '#dbeafe', alignItems: 'center', justifyContent: 'center' },
   nfcBannerTitle: { color: '#1d4ed8', fontSize: 16, fontWeight: '800' },
   nfcBannerSub:   { color: '#475569', fontSize: 13, fontWeight: '500' },
-
-  toggleRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
-  toggleLeft:  { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  toggleTitle: { color: '#0f172a', fontSize: 15, fontWeight: '800' },
-  toggleSub:   { color: '#64748b', fontSize: 11, fontWeight: '500', marginTop: 1 },
-
-  messageField: { marginBottom: 24 },
-  inputBox:     { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, paddingHorizontal: 16, shadowColor: '#000', shadowOpacity: 0.02, shadowRadius: 4, elevation: 1 },
-  input:        { color: '#0f172a', fontSize: 15, fontWeight: '500', paddingVertical: 12, minHeight: 80 },
 
   submitBtn:  { borderRadius: 20, overflow: 'hidden', shadowColor: '#6366f1', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
   submitGrad: { paddingVertical: 16, alignItems: 'center' },
