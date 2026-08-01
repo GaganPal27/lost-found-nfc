@@ -215,7 +215,7 @@ export default function FinderConnectScreen() {
                 style={{ shadowColor: '#e11d48', shadowOpacity: 0.2, shadowRadius: 16, elevation: 5 }}>
                 <Text style={{ fontSize: 44 }}>{cfg.emoji}</Text>
               </View>
-              <Text className="text-slate-500 text-xs uppercase tracking-widest mb-1 font-bold">Step {['confirm','location','contact','sent'].indexOf(step) + 1} of 3</Text>
+              <Text className="text-slate-500 text-xs uppercase tracking-widest mb-1 font-bold">{step === 'sent' ? '✅ Complete!' : `Step ${['confirm','location','contact'].indexOf(step) + 1} of 3`}</Text>
               <Text className="text-slate-900 text-3xl font-black text-center mb-2">{cfg.title}</Text>
               <Text className="text-slate-500 text-base text-center leading-6 font-medium">{cfg.sub}</Text>
             </View>
