@@ -34,18 +34,22 @@ export function MessagesList() {
 
   useEffect(() => {
     Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    if (user?.id) {
-      // Real-time: new conversations (works when the screen is already open)
-      const channel = supabase
-        .channel('connect_convs')
-        .on('postgres_changes',
-          { event: '*', schema: 'public', table: 'conversations', filter: `owner_id=eq.${user.id}` },
-          () => { fetchConversations(); }
-        )
-        .subscribe();
-      return () => { supabase.removeChannel(channel); };
-    }
-  }, [user]);
+    if (!user?.id) return;
+    fetchConversations();
+    // Real-time: new conversations (works when the screen is already open)
+    const channel = supabase
+      .channel(`connect_convs_${user.id}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'conversations', filter: `owner_id=eq.${user.id}` },
+        () => { fetchConversations(); }
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'conversations', filter: `finder_user_id=eq.${user.id}` },
+        () => { fetchConversations(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
 
   // Refetch every time this tab regains focus — the previous version only
   // fetched once on mount, so navigating away and back showed stale/empty
