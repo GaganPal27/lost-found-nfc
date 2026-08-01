@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, Platform, UIManager, LayoutAnimation, StatusBar, Animated } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, Platform, UIManager, LayoutAnimation, StatusBar, Animated, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
@@ -86,6 +86,28 @@ export function NotificationsList() {
 
   const onRefresh = async () => { setRefreshing(true); await fetchNotifs(); setRefreshing(false); };
 
+  const clearAll = async () => {
+    const uid = user?.id;
+    if (!uid || notifications.length === 0) return;
+    Alert.alert(
+      'Clear All Notifications',
+      'This will permanently delete all your notifications. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            await supabase.from('notifications').delete().eq('user_id', uid);
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setNotifications([]);
+            setHasUnreadScanned(false);
+          },
+        },
+      ]
+    );
+  };
+
   const markRead = async (id: string) => {
     await supabase.from('notifications').update({ is_read: true }).eq('id', id);
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -104,7 +126,6 @@ export function NotificationsList() {
   return (
     <View className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" />
-      {/* Header removed for unified wrapper */}
 
       <Animated.View style={{ opacity: fadeIn, flex: 1 }}>
         <FlatList
@@ -117,6 +138,26 @@ export function NotificationsList() {
               tintColor="#e11d48"
               colors={['#e11d48']}
             />
+          }
+          ListHeaderComponent={
+            notifications.length > 0 ? (
+              <TouchableOpacity
+                onPress={clearAll}
+                activeOpacity={0.7}
+                style={{
+                  alignSelf: 'flex-end',
+                  marginBottom: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 7,
+                  backgroundColor: '#fee2e2',
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: '#fecaca',
+                }}
+              >
+                <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 13 }}>🗑 Clear All</Text>
+              </TouchableOpacity>
+            ) : null
           }
           contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
           ListEmptyComponent={

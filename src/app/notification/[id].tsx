@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   View, Text, Switch, TextInput, TouchableOpacity, Alert,
   ActivityIndicator, ScrollView, StatusBar, StyleSheet, Image,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -313,9 +314,18 @@ export default function NotificationDetailScreen() {
   // ── RENDER 2: NFC Scan Coordinate Return Layout ────────────────────
   const canSend = sharePhone || shareLiveLocation || message.trim().length > 0;
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9ff" />
-      <ScrollView contentContainerStyle={styles.scroll}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+    >
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#f8f9ff" />
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         {/* Back */}
         <TouchableOpacity onPress={() => router.back()} style={styles.back} activeOpacity={0.7}>
           <Text style={styles.backArrow}>←</Text>
@@ -425,15 +435,16 @@ export default function NotificationDetailScreen() {
             )}
           </LinearGradient>
         </TouchableOpacity>
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9ff' },
   center:    { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9ff' },
-  scroll:    { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 80 },
+  scroll:    { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 120 },
   notFound:  { color: '#64748b', fontSize: 15, fontWeight: '600' },
 
   back:      { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
