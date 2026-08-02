@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, FlatList,
   KeyboardAvoidingView, Platform, StatusBar, ActivityIndicator,
-  Alert, Linking,
+  Alert, Linking, StyleSheet,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import { useTabBarClearance } from '../../components/FloatingTabBar';
 import * as Haptics from 'expo-haptics';
 
 type Message = {
@@ -29,7 +30,7 @@ type Conversation = {
   resolved: boolean;
   community_item_id?: string | null;
   items?: { item_name: string } | null;
-  community_items?: { title: string } | null;
+  communityItemTitle?: string | null;
 };
 
 export default function ConversationScreen() {
@@ -44,6 +45,7 @@ export default function ConversationScreen() {
   const [sending, setSending] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
+  const tabBarClearance = useTabBarClearance();
 
   // ── Load conversation + initial messages ─────────────────────────────────
   useEffect(() => {
@@ -51,7 +53,6 @@ export default function ConversationScreen() {
     loadConversation();
     loadMessages();
 
-    // Real-time subscription for new messages
     const channel = supabase
       .channel(`conv_${id}`)
       .on(
@@ -68,14 +69,32 @@ export default function ConversationScreen() {
   }, [id]);
 
   const loadConversation = async () => {
+    // NOTE: community_items join removed — PostgREST schema cache doesn't recognise
+    // the community_item_id FK yet (PGRST200). We fetch community item title separately.
     const { data, error } = await supabase
       .from('conversations')
-      .select('*, items(item_name), community_items:community_item_id(title)')
+      .select('*, items(item_name)')
       .eq('id', id)
       .single();
-    if (data) setConv(data as Conversation);
-    // If error is a permissions error, the finder is not logged in — still
-    // allow them to see the chat but they won't be able to resolve it.
+
+    if (error) {
+      console.warn('[Conversation] loadConversation error:', error.message);
+      return;
+    }
+
+    if (data) {
+      // Fetch community item title separately if needed
+      let communityItemTitle: string | null = null;
+      if (data.community_item_id) {
+        const { data: ci } = await supabase
+          .from('community_items')
+          .select('title')
+          .eq('id', data.community_item_id)
+          .single();
+        communityItemTitle = ci?.title ?? null;
+      }
+      setConv({ ...data, communityItemTitle } as Conversation);
+    }
   };
 
   const loadMessages = async () => {
@@ -94,15 +113,20 @@ export default function ConversationScreen() {
   const sendMessage = async () => {
     if (!body.trim()) return;
     setSending(true);
-    const senderName = dbUser?.full_name ?? (user?.email?.split('@')[0] ?? 'Owner');
-    await supabase.from('messages').insert({
+    const senderName = dbUser?.full_name ?? (user?.email?.split('@')[0] ?? 'User');
+    const { error } = await supabase.from('messages').insert({
       conversation_id: id,
       sender_id: user?.id ?? null,
       sender_name: senderName,
       body: body.trim(),
     });
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setBody('');
+    if (error) {
+      Alert.alert('Error', 'Could not send message. Please try again.');
+      console.error('[Conversation] sendMessage error:', error.message);
+    } else {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setBody('');
+    }
     setSending(false);
   };
 
@@ -124,15 +148,13 @@ export default function ConversationScreen() {
           text: 'Resolve', style: 'default',
           onPress: async () => {
             await supabase.from('conversations').update({ resolved: true }).eq('id', id);
-            
             if (conv?.item_id) {
               await supabase.from('items').update({ status: 'found' }).eq('id', conv.item_id);
             } else if (conv?.community_item_id) {
               await supabase.from('community_items').update({ status: 'closed' }).eq('id', conv.community_item_id);
             }
-
+            setConv((prev) => prev ? { ...prev, resolved: true } : prev);
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            router.replace('/(tabs)/community');
           },
         },
       ]
@@ -140,7 +162,7 @@ export default function ConversationScreen() {
   };
 
   const isOwner = user?.id === conv?.owner_id;
-  const itemName = conv?.community_items?.title ?? conv?.items?.item_name ?? 'Item';
+  const itemName = conv?.communityItemTitle ?? conv?.items?.item_name ?? 'Chat';
 
   const formatTime = (ts: string) => {
     const d = new Date(ts);
@@ -148,19 +170,14 @@ export default function ConversationScreen() {
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
-    const isMe = item.sender_id === user?.id || (!item.sender_id && !isOwner);
+    const isMe = item.sender_id === user?.id;
     return (
-      <View className={`mb-3 ${isMe ? 'items-end' : 'items-start'}`}>
-        <Text className="text-slate-500 text-xs mb-1 mx-1">{item.sender_name}</Text>
-        <View
-          className={`max-w-xs px-4 py-3 rounded-2xl shadow-sm ${isMe
-            ? 'bg-primary rounded-br-sm'
-            : 'bg-white border border-slate-200 rounded-bl-sm'
-          }`}
-        >
-          <Text className={isMe ? 'text-white font-medium' : 'text-slate-900 font-medium'}>{item.body}</Text>
+      <View style={[styles.msgWrapper, isMe ? styles.msgWrapperMe : styles.msgWrapperOther]}>
+        <Text style={styles.msgSender}>{isMe ? 'You' : item.sender_name}</Text>
+        <View style={[styles.msgBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+          <Text style={isMe ? styles.msgTextMe : styles.msgTextOther}>{item.body}</Text>
         </View>
-        <Text className="text-slate-600 text-xs mt-1 mx-1">{formatTime(item.created_at)}</Text>
+        <Text style={styles.msgTime}>{formatTime(item.created_at)}</Text>
       </View>
     );
   };
@@ -168,85 +185,72 @@ export default function ConversationScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1"
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
-      <View className="flex-1 bg-slate-50">
-        <StatusBar barStyle="dark-content" />
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
         {/* Header */}
-        <View className="px-4 pt-14 pb-3 border-b border-slate-200 bg-white shadow-sm z-10">
-          <View className="flex-row items-center justify-between">
-            <TouchableOpacity onPress={() => router.back()} className="flex-row items-center" activeOpacity={0.7}>
-              <Text className="text-primary text-lg mr-1">←</Text>
-              <Text className="text-primary font-semibold">Back</Text>
-            </TouchableOpacity>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+            <Text style={styles.backArrow}>←</Text>
+            <Text style={styles.backLabel}>Back</Text>
+          </TouchableOpacity>
 
-            <View className="items-center flex-1 px-4">
-              <Text className="text-slate-900 font-bold text-base" numberOfLines={1}>{itemName}</Text>
-              {conv?.scan_location && (
-                <Text className="text-slate-500 text-xs font-medium" numberOfLines={1}>📍 {conv.scan_location}</Text>
-              )}
-            </View>
-
-            {/* Action buttons */}
-            {isOwner && (
-              <View className="flex-row gap-2">
-                {conv?.finder_phone && (
-                  <TouchableOpacity
-                    className="w-9 h-9 bg-green-100 border border-green-200 rounded-xl items-center justify-center"
-                    onPress={handleCallFinder}
-                    activeOpacity={0.7}
-                  >
-                    <Text className="text-lg">📞</Text>
-                  </TouchableOpacity>
-                )}
-                {!conv?.resolved && (
-                  <TouchableOpacity
-                    className="w-9 h-9 bg-primary/10 border border-primary/20 rounded-xl items-center justify-center"
-                    onPress={handleResolve}
-                    activeOpacity={0.7}
-                  >
-                    <Text className="text-lg">✓</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle} numberOfLines={1}>{itemName}</Text>
+            {conv?.scan_location && (
+              <Text style={styles.headerSub} numberOfLines={1}>📍 {conv.scan_location}</Text>
             )}
           </View>
 
-          {conv?.resolved && (
-            <View className="mt-2 bg-green-50 border border-green-200 rounded-xl px-3 py-1.5 items-center">
-              <Text className="text-green-700 text-xs font-bold">✓ Resolved — Item Returned</Text>
+          {isOwner && (
+            <View style={styles.headerActions}>
+              {conv?.finder_phone && (
+                <TouchableOpacity style={styles.actionBtn} onPress={handleCallFinder} activeOpacity={0.7}>
+                  <Text style={{ fontSize: 18 }}>📞</Text>
+                </TouchableOpacity>
+              )}
+              {!conv?.resolved && (
+                <TouchableOpacity style={[styles.actionBtn, styles.resolveBtn]} onPress={handleResolve} activeOpacity={0.7}>
+                  <Text style={{ color: '#6366f1', fontWeight: '800', fontSize: 13 }}>✓</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
 
+        {conv?.resolved && (
+          <View style={styles.resolvedBanner}>
+            <Text style={styles.resolvedText}>✓ Resolved — Item Returned</Text>
+          </View>
+        )}
+
         {/* Finder info banner (owner only) */}
         {isOwner && conv?.finder_name && (
-          <View className="mx-4 mt-3 bg-white border border-slate-200 rounded-2xl px-4 py-3 flex-row items-center shadow-sm">
-            <View className="w-10 h-10 bg-primary/10 border border-primary/20 rounded-full items-center justify-center mr-3">
-              <Text className="text-lg">👤</Text>
+          <View style={styles.finderBanner}>
+            <View style={styles.finderAvatar}>
+              <Text style={{ fontSize: 18 }}>👤</Text>
             </View>
-            <View className="flex-1">
-              <Text className="text-slate-900 font-bold">{conv.finder_name}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.finderName}>{conv.finder_name}</Text>
               {conv.finder_phone && (
-                <Text className="text-slate-500 text-sm font-medium">{conv.finder_phone}</Text>
+                <Text style={styles.finderPhone}>{conv.finder_phone}</Text>
               )}
             </View>
             {conv.finder_phone && (
-              <TouchableOpacity onPress={handleCallFinder} activeOpacity={0.7}>
-                <View className="bg-green-100 border border-green-200 px-3 py-1.5 rounded-xl shadow-sm">
-                  <Text className="text-green-700 text-xs font-bold">Call</Text>
-                </View>
+              <TouchableOpacity onPress={handleCallFinder} activeOpacity={0.7} style={styles.callBtn}>
+                <Text style={styles.callBtnText}>Call</Text>
               </TouchableOpacity>
             )}
           </View>
         )}
 
-        {/* Messages */}
+        {/* Messages list */}
         {loading ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator color="#06b6d4" size="large" />
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color="#6366f1" size="large" />
           </View>
         ) : (
           <FlatList
@@ -254,46 +258,138 @@ export default function ConversationScreen() {
             data={messages}
             keyExtractor={(m) => m.id}
             renderItem={renderMessage}
-            contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
+            // paddingBottom pushes the last message above both the input bar
+            // AND the FloatingTabBar that sits at the very bottom of the screen.
+            contentContainerStyle={{ padding: 16, paddingBottom: 16 }}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             ListEmptyComponent={
-              <View className="items-center py-16">
-                <Text className="text-4xl mb-3">💬</Text>
-                <Text className="text-slate-500 text-center font-medium">No messages yet.\nStart the conversation below.</Text>
+              <View style={styles.emptyBox}>
+                <Text style={{ fontSize: 40, marginBottom: 12 }}>💬</Text>
+                <Text style={styles.emptyText}>No messages yet.{'\n'}Start the conversation below.</Text>
               </View>
             }
           />
         )}
 
-        {/* Input bar */}
-        {!conv?.resolved && (
-          <View className="px-4 py-3 border-t border-slate-200 bg-white flex-row items-end gap-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-            <View className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3">
-              <TextInput
-                className="text-slate-900 text-base font-medium"
-                placeholder="Type a message..."
-                placeholderTextColor="#94a3b8"
-                value={body}
-                onChangeText={setBody}
-                multiline
-                maxLength={500}
-                style={{ maxHeight: 100 }}
-              />
-            </View>
-            <TouchableOpacity
-              className={`w-12 h-12 bg-primary rounded-2xl items-center justify-center shadow-md shadow-primary/30 ${(!body.trim() || sending) ? 'opacity-50' : ''}`}
-              onPress={sendMessage}
-              disabled={!body.trim() || sending}
-              activeOpacity={0.85}
-            >
-              {sending
-                ? <ActivityIndicator color="#ffffff" size="small" />
-                : <Text className="text-xl text-white">↑</Text>
-              }
-            </TouchableOpacity>
+        {/* ── Input bar ── */}
+        {/* paddingBottom pushes the input content above the FloatingTabBar
+            which is absolutely positioned at the very bottom of the screen. */}
+        <View style={[styles.inputBar, { paddingBottom: tabBarClearance }]}>
+          <View style={styles.inputWrap}>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Type a message..."
+              placeholderTextColor="#94a3b8"
+              value={body}
+              onChangeText={setBody}
+              multiline
+              maxLength={500}
+              editable={!conv?.resolved}
+            />
           </View>
-        )}
+          <TouchableOpacity
+            style={[styles.sendBtn, (!body.trim() || sending || conv?.resolved) && styles.sendBtnDisabled]}
+            onPress={sendMessage}
+            disabled={!body.trim() || sending || !!conv?.resolved}
+            activeOpacity={0.85}
+          >
+            {sending
+              ? <ActivityIndicator color="#ffffff" size="small" />
+              : <Text style={styles.sendIcon}>↑</Text>
+            }
+          </TouchableOpacity>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+
+  // Header
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingTop: 52, paddingBottom: 12, paddingHorizontal: 16,
+    backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0',
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3,
+  },
+  backBtn:    { flexDirection: 'row', alignItems: 'center' },
+  backArrow:  { color: '#6366f1', fontSize: 20, marginRight: 4 },
+  backLabel:  { color: '#6366f1', fontWeight: '700', fontSize: 15 },
+  headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 12 },
+  headerTitle:  { color: '#0f172a', fontWeight: '800', fontSize: 15 },
+  headerSub:    { color: '#64748b', fontSize: 11, fontWeight: '500', marginTop: 1 },
+  headerActions: { flexDirection: 'row', gap: 8 },
+  actionBtn: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  resolveBtn: { backgroundColor: '#eef2ff', borderColor: '#c7d2fe' },
+
+  resolvedBanner: {
+    backgroundColor: '#f0fdf4', borderBottomWidth: 1, borderBottomColor: '#bbf7d0',
+    paddingVertical: 8, alignItems: 'center',
+  },
+  resolvedText: { color: '#15803d', fontSize: 13, fontWeight: '800' },
+
+  finderBanner: {
+    flexDirection: 'row', alignItems: 'center',
+    margin: 12, padding: 14,
+    backgroundColor: '#ffffff', borderRadius: 20, borderWidth: 1, borderColor: '#e2e8f0',
+    shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1,
+  },
+  finderAvatar: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#eef2ff', borderWidth: 1, borderColor: '#c7d2fe',
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+  },
+  finderName:  { color: '#0f172a', fontWeight: '800', fontSize: 15 },
+  finderPhone: { color: '#64748b', fontSize: 13, fontWeight: '500', marginTop: 2 },
+  callBtn:     { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 },
+  callBtnText: { color: '#15803d', fontWeight: '800', fontSize: 13 },
+
+  // Messages
+  loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyBox:   { flex: 1, alignItems: 'center', paddingTop: 80 },
+  emptyText:  { color: '#94a3b8', fontSize: 15, fontWeight: '600', textAlign: 'center', lineHeight: 22 },
+
+  msgWrapper:      { marginBottom: 14 },
+  msgWrapperMe:    { alignItems: 'flex-end' },
+  msgWrapperOther: { alignItems: 'flex-start' },
+  msgSender: { color: '#94a3b8', fontSize: 11, fontWeight: '600', marginBottom: 3, marginHorizontal: 4 },
+  msgBubble: { maxWidth: '78%', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
+  bubbleMe:    { backgroundColor: '#6366f1', borderBottomRightRadius: 4 },
+  bubbleOther: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderBottomLeftRadius: 4 },
+  msgTextMe:    { color: '#ffffff', fontSize: 15, fontWeight: '500' },
+  msgTextOther: { color: '#0f172a', fontSize: 15, fontWeight: '500' },
+  msgTime: { color: '#94a3b8', fontSize: 10, fontWeight: '500', marginTop: 3, marginHorizontal: 4 },
+
+  // Input
+  inputBar: {
+    flexDirection: 'row', alignItems: 'flex-end', gap: 10,
+    paddingHorizontal: 14, paddingTop: 12,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1, borderTopColor: '#e2e8f0',
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: -4 }, elevation: 8,
+  },
+  inputWrap: {
+    flex: 1, backgroundColor: '#f8fafc',
+    borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 20,
+    paddingHorizontal: 16, paddingVertical: 10, minHeight: 44,
+  },
+  textInput: {
+    color: '#0f172a', fontSize: 15, fontWeight: '500',
+    maxHeight: 120, lineHeight: 22,
+  },
+  sendBtn: {
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: '#6366f1',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#6366f1', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 5,
+    marginBottom: 2,
+  },
+  sendBtnDisabled: { opacity: 0.45 },
+  sendIcon: { color: '#ffffff', fontSize: 20, fontWeight: '900' },
+});
