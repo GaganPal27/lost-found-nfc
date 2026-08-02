@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, RefreshControl,
-  StatusBar, Animated, ActivityIndicator,
+  StatusBar, Animated, ActivityIndicator, Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
@@ -61,15 +61,25 @@ export function MessagesList() {
   );
 
   const fetchConversations = async () => {
-    if (!user?.id) return;
+    if (!user?.id) { console.log('[Messages] No user id, skipping fetch'); return; }
     setLoading(true);
-    const { data } = await supabase
+    console.log('[Messages] Fetching for user.id =', user.id);
+
+    const { data, error } = await supabase
       .from('conversations')
       .select('*, items(item_name, image_url), community_items:community_item_id(title, image_url)')
       .or(`owner_id.eq.${user.id},finder_user_id.eq.${user.id}`)
       .order('created_at', { ascending: false });
 
+    console.log('[Messages] rows:', data?.length ?? 0, '| error:', error?.message ?? 'none');
+    // DEBUG: show on screen so we can diagnose
+    Alert.alert(
+      '🔍 Debug: Messages Tab',
+      `user.id = ${user.id}\n\nRows returned: ${data?.length ?? 'null'}\n\nError: ${error?.message ?? 'none'}\n\nCode: ${error?.code ?? 'none'}`
+    );
+
     if (data) {
+
       // Fetch last message for each conversation
       const withMessages = await Promise.all(
         (data as ConversationRow[]).map(async (conv) => {
