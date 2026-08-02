@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, RefreshControl,
-  StatusBar, Animated, ActivityIndicator, Alert,
+  StatusBar, Animated, ActivityIndicator,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
@@ -61,35 +61,39 @@ export function MessagesList() {
   );
 
   const fetchConversations = async () => {
-    if (!user?.id) { console.log('[Messages] No user id, skipping fetch'); return; }
+    if (!user?.id) return;
     setLoading(true);
-    console.log('[Messages] Fetching for user.id =', user.id);
 
+    // Note: community_items cannot be joined directly because PostgREST's schema
+    // cache doesn't recognise the community_item_id foreign key yet (PGRST200).
+    // We fetch community item names in a second pass instead.
     const { data, error } = await supabase
       .from('conversations')
-      .select('*, items(item_name, image_url), community_items:community_item_id(title, image_url)')
+      .select('*, items(item_name, image_url)')
       .or(`owner_id.eq.${user.id},finder_user_id.eq.${user.id}`)
       .order('created_at', { ascending: false });
 
-    console.log('[Messages] rows:', data?.length ?? 0, '| error:', error?.message ?? 'none');
-    // DEBUG: show on screen so we can diagnose
-    Alert.alert(
-      '🔍 Debug: Messages Tab',
-      `user.id = ${user.id}\n\nRows returned: ${data?.length ?? 'null'}\n\nError: ${error?.message ?? 'none'}\n\nCode: ${error?.code ?? 'none'}`
-    );
+    if (error) {
+      console.error('[Messages] fetch error:', error.message, error.code);
+      setLoading(false);
+      return;
+    }
 
     if (data) {
-
-      // Fetch last message for each conversation
+      // For each conversation, fetch last message + community item name in parallel
       const withMessages = await Promise.all(
         (data as ConversationRow[]).map(async (conv) => {
-          const { data: msgs } = await supabase
-            .from('messages')
-            .select('body')
-            .eq('conversation_id', conv.id)
-            .order('created_at', { ascending: false })
-            .limit(1);
-          return { ...conv, last_message: msgs?.[0]?.body ?? null };
+          const [msgRes, ciRes] = await Promise.all([
+            supabase.from('messages').select('body').eq('conversation_id', conv.id).order('created_at', { ascending: false }).limit(1),
+            conv.community_item_id
+              ? supabase.from('community_items').select('title, image_url').eq('id', conv.community_item_id).single()
+              : Promise.resolve({ data: null }),
+          ]);
+          return {
+            ...conv,
+            last_message: msgRes.data?.[0]?.body ?? null,
+            community_items: ciRes.data ?? null,
+          };
         })
       );
       setConversations(withMessages);
