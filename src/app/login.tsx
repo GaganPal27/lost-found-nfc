@@ -81,7 +81,7 @@ export default function LoginScreen() {
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48 }}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
-        extraScrollHeight={20}
+        extraScrollHeight={100}
       >
         {/* Decorative NFC rings */}
         <View className="absolute inset-0 items-center justify-center" pointerEvents="none">

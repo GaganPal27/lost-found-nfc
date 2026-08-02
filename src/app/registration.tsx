@@ -189,7 +189,7 @@ export default function RegistrationScreen() {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
-        extraScrollHeight={20}
+        extraScrollHeight={100}
       >
         {/* Back Button */}
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
