@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, RefreshControl,
-  StatusBar, Animated, ActivityIndicator,
+  StatusBar, Animated, ActivityIndicator, Alert, LayoutAnimation,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
@@ -107,6 +107,31 @@ export function MessagesList() {
     setRefreshing(false);
   };
 
+  const clearAll = async () => {
+    const uid = user?.id;
+    if (!uid || conversations.length === 0) return;
+    Alert.alert(
+      'Clear All Messages',
+      'This will permanently delete all your conversations and messages. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            // Delete conversations where user is owner or finder
+            await Promise.all([
+              supabase.from('conversations').delete().eq('owner_id', uid),
+              supabase.from('conversations').delete().eq('finder_user_id', uid),
+            ]);
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setConversations([]);
+          },
+        },
+      ]
+    );
+  };
+
   const formatDate = (ts: string) => {
     const d = new Date(ts);
     const now = new Date();
@@ -195,6 +220,26 @@ export function MessagesList() {
             contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#e11d48" colors={['#e11d48']} />
+            }
+            ListHeaderComponent={
+              conversations.length > 0 ? (
+                <TouchableOpacity
+                  onPress={clearAll}
+                  activeOpacity={0.7}
+                  style={{
+                    alignSelf: 'flex-end',
+                    marginBottom: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 7,
+                    backgroundColor: '#fee2e2',
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: '#fecaca',
+                  }}
+                >
+                  <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 13 }}>🗑 Clear All</Text>
+                </TouchableOpacity>
+              ) : null
             }
             ListEmptyComponent={
               <View className="items-center justify-center py-28">
