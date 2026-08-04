@@ -1,12 +1,12 @@
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Item } from '../stores/itemStore';
 import * as Haptics from 'expo-haptics';
 
 const STATUS_PILL: Record<string, { bg: string; text: string; dot: string; label: string }> = {
-  active: { bg: 'bg-green-100 border-green-200',  text: 'text-green-700',  dot: 'bg-green-500', label: 'Active' },
-  lost:   { bg: 'bg-red-100 border-red-200',      text: 'text-red-700',    dot: 'bg-red-500',   label: 'Lost'   },
-  found:  { bg: 'bg-blue-100 border-blue-200',    text: 'text-blue-700',   dot: 'bg-blue-500',  label: 'Found'  },
+  active: { bg: '#dcfce7', text: '#16a34a', dot: '#22c55e', label: 'Active' },
+  lost:   { bg: '#fee2e2', text: '#dc2626', dot: '#ef4444', label: 'Lost'   },
+  found:  { bg: '#dbeafe', text: '#2563eb', dot: '#3b82f6', label: 'Found'  },
 };
 
 const TAG_META: Record<string, { icon: string; label: string }> = {
@@ -16,13 +16,13 @@ const TAG_META: Record<string, { icon: string; label: string }> = {
 };
 
 const CATEGORY_META: Record<string, { icon: string; bg: string }> = {
-  Personal: { icon: '👤', bg: '#E0E7FF' }, // Indigo
+  Personal:    { icon: '👤', bg: '#E0E7FF' }, // Indigo
   Electronics: { icon: '💻', bg: '#FEF08A' }, // Yellow
-  Bag: { icon: '👜', bg: '#FCE7F3' }, // Pink
-  Keys: { icon: '🔑', bg: '#DCFCE7' }, // Green
-  Wallet: { icon: '💳', bg: '#F3E8FF' }, // Purple
-  Travel: { icon: '✈️', bg: '#FFE4E6' }, // Rose
-  Other: { icon: '📦', bg: '#F3F4F6' }, // Gray
+  Bag:         { icon: '👜', bg: '#FCE7F3' }, // Pink
+  Keys:        { icon: '🔑', bg: '#DCFCE7' }, // Green
+  Wallet:      { icon: '💳', bg: '#F3E8FF' }, // Purple
+  Travel:      { icon: '✈️', bg: '#FFE4E6' }, // Rose
+  Other:       { icon: '📦', bg: '#F3F4F6' }, // Gray
 };
 
 export default function ItemCard({ item }: { item: Item }) {
@@ -41,135 +41,201 @@ export default function ItemCard({ item }: { item: Item }) {
 
   return (
     <TouchableOpacity
-      activeOpacity={0.82}
+      activeOpacity={0.88}
       onPress={() => router.push(`/item-detail/${item.id}`)}
-      style={{
-        backgroundColor: '#ffffff',
-        borderRadius: 24, // Larger, more modern border radius
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: isLost ? 'rgba(244,63,94,0.4)' : 'rgba(0,0,0,0.03)',
-        shadowColor: isLost ? '#f43f5e' : '#6366f1',
-        shadowOpacity: isLost ? 0.25 : 0.08,
-        shadowRadius: 15,
-        shadowOffset: { width: 0, height: 6 },
-        elevation: 4,
-        overflow: 'hidden',
-      }}
+      style={[
+        styles.card,
+        isLost && styles.cardLost,
+      ]}
     >
       {/* Lost mode accent bar */}
-      {isLost && (
-        <View style={{ height: 4, backgroundColor: '#f43f5e', width: '100%' }} />
-      )}
+      {isLost && <View style={styles.lostBar} />}
 
-      <View style={{ flexDirection: 'row', padding: 14, alignItems: 'center' }}>
+      <View style={styles.contentRow}>
         {/* Item Thumbnail */}
-        <View
-          style={{
-            width: 72,
-            height: 72,
-            backgroundColor: catMeta.bg,
-            borderRadius: 20,
-            marginRight: 14,
-            overflow: 'hidden',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+        <View style={[styles.thumbnail, { backgroundColor: catMeta.bg }]}>
           {item.image_url && !item.image_url.includes('placeholder') ? (
-            <Image source={{ uri: item.image_url }} style={{ width: '100%', height: '100%' }} />
+            <Image source={{ uri: item.image_url }} style={styles.thumbnailImg} />
           ) : (
-            <Text style={{ fontSize: 32 }}>{catMeta.icon}</Text>
+            <Text style={styles.thumbnailIcon}>{catMeta.icon}</Text>
           )}
         </View>
 
-        {/* Content */}
-        <View style={{ flex: 1 }}>
-          {/* Name + Status pill */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <Text
-              style={{ color: '#0f172a', fontSize: 15, fontWeight: '800', flex: 1, marginRight: 8 }}
-              numberOfLines={1}
-            >
+        {/* Info Column */}
+        <View style={styles.infoCol}>
+          {/* Header Row: Name + Status */}
+          <View style={styles.headerRow}>
+            <Text style={styles.itemName} numberOfLines={1}>
               {item.item_name}
             </Text>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 20,
-                borderWidth: 1,
-              }}
-              className={`${pill.bg}`}
-            >
-              <View
-                style={{ width: 6, height: 6, borderRadius: 3, marginRight: 5 }}
-                className={pill.dot}
-              />
-              <Text
-                style={{ fontSize: 10, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' }}
-                className={pill.text}
-              >
+            <View style={[styles.statusPill, { backgroundColor: pill.bg }]}>
+              <View style={[styles.statusDot, { backgroundColor: pill.dot }]} />
+              <Text style={[styles.statusText, { color: pill.text }]}>
                 {pill.label}
               </Text>
             </View>
           </View>
 
-          {/* Tag type + Category meta row */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: 'rgba(99,102,241,0.1)',
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 12,
-              }}
-            >
-              <Text style={{ fontSize: 10, marginRight: 4 }}>{tag.icon}</Text>
-              <Text style={{ color: '#6366f1', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 }}>
-                {tag.label}
-              </Text>
-            </View>
-            <Text style={{ color: '#64748b', fontSize: 12, marginLeft: 2, fontWeight: '600' }}>{item.category}</Text>
-            {isLinked && (
-              <View style={{ backgroundColor: 'rgba(139,92,246,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginLeft: 4 }}>
-                <Text style={{ color: '#8b5cf6', fontSize: 10, fontWeight: '700' }}>💳 Linked</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Last seen + Track */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 7 }}>
+          {/* Last seen + Track button */}
+          <View style={styles.actionRow}>
             {item.last_seen_at ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#6366f1', marginRight: 6 }} />
-                <Text style={{ color: '#64748b', fontSize: 11, fontWeight: '500' }} numberOfLines={1}>
+              <View style={styles.lastSeenWrap}>
+                <View style={styles.lastSeenDot} />
+                <Text style={styles.lastSeenText} numberOfLines={1}>
                   Seen {new Date(item.last_seen_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                  {' '}· {(item as any).last_seen_location ?? ''}
+                  {(item as any).last_seen_location ? ` · ${(item as any).last_seen_location}` : ''}
                 </Text>
               </View>
             ) : (
               <View style={{ flex: 1 }} />
             )}
+
             <TouchableOpacity
               onPress={handleTrack}
               activeOpacity={0.7}
-              style={{ backgroundColor: '#6366f1', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, shadowColor: '#6366f1', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 }}
+              style={styles.trackBtn}
             >
-              <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 }}>📍 Track</Text>
+              <Text style={styles.trackBtnText}>📍 Track</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Arrow */}
-        <View style={{ justifyContent: 'center', paddingLeft: 8 }}>
-          <Text style={{ color: '#94a3b8', fontSize: 24, fontWeight: '300' }}>›</Text>
+        {/* Chevron */}
+        <View style={styles.chevronWrap}>
+          <Text style={styles.chevron}>→</Text>
         </View>
+      </View>
+
+      {/* Bottom Meta Bar */}
+      <View style={styles.bottomMeta}>
+        <View style={styles.metaBadge}>
+          <Text style={styles.metaIcon}>{tag.icon}</Text>
+          <Text style={styles.metaLabel}>{tag.label}</Text>
+        </View>
+        <Text style={styles.metaCategory}>· {item.category}</Text>
+        {isLinked && (
+          <View style={styles.linkedBadge}>
+            <Text style={styles.linkedText}>💳 Linked</Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.03)',
+    shadowColor: '#6366f1',
+    shadowOpacity: 0.08,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  cardLost: {
+    borderColor: 'rgba(244,63,94,0.4)',
+    shadowColor: '#f43f5e',
+    shadowOpacity: 0.25,
+  },
+  lostBar: {
+    height: 4,
+    backgroundColor: '#f43f5e',
+    width: '100%',
+  },
+  contentRow: {
+    flexDirection: 'row',
+    padding: 16,
+    paddingBottom: 12,
+    alignItems: 'center',
+  },
+  thumbnail: {
+    width: 76,
+    height: 76,
+    borderRadius: 20,
+    marginRight: 14,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumbnailImg: { width: '100%', height: '100%' },
+  thumbnailIcon: { fontSize: 34 },
+  
+  infoCol: { flex: 1 },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  itemName: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: '900',
+    flex: 1,
+    marginRight: 8,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
+  statusText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
+
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  lastSeenWrap: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 },
+  lastSeenDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#6366f1', marginRight: 6 },
+  lastSeenText: { color: '#64748b', fontSize: 11, fontWeight: '600' },
+  
+  trackBtn: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+  },
+  trackBtnText: { color: '#ffffff', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+
+  chevronWrap: { justifyContent: 'center', paddingLeft: 10 },
+  chevron: { color: '#6366f1', fontSize: 20, fontWeight: '600' },
+
+  bottomMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  metaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(99,102,241,0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  metaIcon: { fontSize: 10, marginRight: 4 },
+  metaLabel: { color: '#6366f1', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  metaCategory: { color: '#64748b', fontSize: 12, fontWeight: '600', marginLeft: 2 },
+  
+  linkedBadge: {
+    backgroundColor: 'rgba(139,92,246,0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 4,
+  },
+  linkedText: { color: '#8b5cf6', fontSize: 10, fontWeight: '700' },
+});
