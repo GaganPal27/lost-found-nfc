@@ -1,21 +1,17 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 interface PlanCardProps {
   id: 'basic' | 'pro' | 'max';
-  name: string;
-  price: string;
-  period?: string;
-  oneLiner: string;
-  badges: string[];
-  isPopular?: boolean;
-  selected: boolean;
+  name: string; price: string; period?: string;
+  oneLiner: string; badges: string[];
+  isPopular?: boolean; selected: boolean;
   onSelect: () => void;
 }
 
-const PLAN_STYLES: Record<string, { accent: string; glow: string; badge: string }> = {
-  basic: { accent: 'border-slate-300',     glow: '',                              badge: 'bg-slate-100 text-slate-700' },
-  pro:   { accent: 'border-blue-400',      glow: 'shadow-blue-500/20',            badge: 'bg-blue-100 text-blue-700'  },
-  max:   { accent: 'border-red-400',       glow: 'shadow-red-500/20',             badge: 'bg-red-100 text-red-700' },
+const PLAN_STYLES: Record<string, { accent: string; badgeBg: string; badgeText: string }> = {
+  basic: { accent: '#cbd5e1', badgeBg: '#f1f5f9', badgeText: '#475569' },
+  pro:   { accent: '#6366f1', badgeBg: '#eef2ff', badgeText: '#6366f1'  },
+  max:   { accent: '#f43f5e', badgeBg: '#fff1f2', badgeText: '#f43f5e' },
 };
 
 export default function PlanCard({
@@ -25,52 +21,62 @@ export default function PlanCard({
 
   return (
     <TouchableOpacity
-      activeOpacity={0.85}
+      activeOpacity={0.88}
       onPress={onSelect}
-      className={`rounded-3xl border p-5 mb-3 shadow-sm ${
-        selected
-          ? `bg-slate-50 ${style.accent}`
-          : 'bg-white border-slate-200'
-      }`}
-      style={selected ? { shadowColor: id === 'pro' ? '#3b82f6' : id === 'max' ? '#ef4444' : '#64748b', shadowOpacity: 0.15, shadowRadius: 12, elevation: 2 } : {}}
+      style={[
+        styles.card,
+        selected ? [styles.cardSelected, { borderColor: style.accent }] : styles.cardUnselected,
+        selected && id === 'pro' && { shadowColor: '#6366f1' }
+      ]}
     >
-      {/* Popular badge */}
       {isPopular && (
-        <View className="absolute top-4 right-4 bg-primary px-3 py-1 rounded-full shadow-sm shadow-primary/20">
-          <Text className="text-white text-[10px] font-bold uppercase tracking-widest">Most Popular</Text>
+        <View style={styles.popularBadge}>
+          <Text style={styles.popularText}>Most Popular</Text>
         </View>
       )}
 
-      {/* Header */}
-      <View className="flex-row justify-between items-start mb-3">
-        <View>
-          <Text className="text-slate-900 font-bold text-xl mb-0.5">{name}</Text>
-          <Text className="text-slate-500 text-sm font-medium">{oneLiner}</Text>
+      <View style={styles.headerRow}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.planName}>{name}</Text>
+          <Text style={styles.oneLiner}>{oneLiner}</Text>
         </View>
-        <View className="items-end">
-          <Text className="text-slate-900 font-bold text-2xl">{price}</Text>
-          {price !== 'Free' && <Text className="text-slate-500 text-xs font-medium">{period}</Text>}
+        <View style={styles.headerRight}>
+          <Text style={styles.priceText}>{price}</Text>
+          {price !== 'Free' && <Text style={styles.periodText}>{period}</Text>}
         </View>
       </View>
 
-      {/* Divider */}
-      <View className={`h-px mb-3 ${selected ? style.accent.replace('border-', 'bg-') + '/20' : 'bg-slate-100'}`} />
+      <View style={[styles.divider, selected ? { backgroundColor: style.badgeBg } : {}]} />
 
-      {/* Feature Badges */}
-      <View className="flex-row flex-wrap gap-2">
+      <View style={styles.badgeRow}>
         {badges.map((badge, idx) => (
-          <View key={idx} className={`px-3 py-1 rounded-full ${selected ? style.badge.split(' ')[0] : 'bg-slate-100'}`}>
-            <Text className={`text-xs font-bold ${selected ? style.badge.split(' ')[1] : 'text-slate-500'}`}>
-              {badge}
-            </Text>
+          <View key={idx} style={[styles.badge, { backgroundColor: selected ? style.badgeBg : '#f1f5f9' }]}>
+            <Text style={[styles.badgeText, { color: selected ? style.badgeText : '#64748b' }]}>{badge}</Text>
           </View>
         ))}
       </View>
 
-      {/* Selected indicator */}
-      {selected && (
-        <View className={`absolute top-4 left-4 w-2 h-2 rounded-full ${id === 'pro' ? 'bg-blue-500' : id === 'max' ? 'bg-red-500' : 'bg-slate-400'}`} />
-      )}
+      {selected && <View style={[styles.selectedIndicator, { backgroundColor: style.accent }]} />}
     </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  card: { borderRadius: 24, padding: 20, marginBottom: 12, borderWidth: 1 },
+  cardUnselected: { backgroundColor: '#ffffff', borderColor: '#e2e8f0' },
+  cardSelected: { backgroundColor: '#f8faff', shadowOpacity: 0.1, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  popularBadge: { position: 'absolute', top: -12, right: 20, backgroundColor: '#6366f1', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, shadowColor: '#6366f1', shadowOpacity: 0.3, shadowRadius: 6, elevation: 3 },
+  popularText: { color: '#ffffff', fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  headerLeft: { flex: 1, paddingRight: 12 },
+  planName: { color: '#0f172a', fontSize: 20, fontWeight: '800', marginBottom: 2 },
+  oneLiner: { color: '#64748b', fontSize: 13, fontWeight: '500' },
+  headerRight: { alignItems: 'flex-end' },
+  priceText: { color: '#0f172a', fontSize: 24, fontWeight: '900' },
+  periodText: { color: '#64748b', fontSize: 12, fontWeight: '600' },
+  divider: { height: 1, backgroundColor: '#f1f5f9', marginBottom: 12 },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  badgeText: { fontSize: 11, fontWeight: '800' },
+  selectedIndicator: { position: 'absolute', top: 22, left: 20, width: 8, height: 8, borderRadius: 4 },
+});

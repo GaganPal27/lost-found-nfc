@@ -28,7 +28,7 @@ interface Props {
 
 export default function PlanSelector({ selectedTier, onSelectTier }: Props) {
   return (
-    <View>
+    <View style={{ gap: 16 }}>
       {PLANS.map(plan => (
         <PlanCard
           key={plan.id}
