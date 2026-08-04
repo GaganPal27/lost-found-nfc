@@ -1,7 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Animated, StatusBar, ScrollView } from 'react-native';
+import { useState, useRef } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, Alert,
+  StatusBar, StyleSheet, ActivityIndicator,
+} from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 
@@ -10,192 +14,250 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+
   const passwordRef = useRef<TextInput>(null);
   const router = useRouter();
-
-  // Pulse animation for decorative rings
-  const pulse1 = useRef(new Animated.Value(0.4)).current;
-  const pulse2 = useRef(new Animated.Value(0.6)).current;
-  const pulse3 = useRef(new Animated.Value(0.8)).current;
-
-  useEffect(() => {
-    const animate = (anim: Animated.Value, delay: number) => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(anim, { toValue: 1, duration: 2200, delay, useNativeDriver: true }),
-          Animated.timing(anim, { toValue: 0.3, duration: 2200, useNativeDriver: true }),
-        ])
-      ).start();
-    };
-    animate(pulse1, 0);
-    animate(pulse2, 400);
-    animate(pulse3, 800);
-  }, []);
+  const insets = useSafeAreaInsets();
 
   const handleLogin = async () => {
-    if (!email.trim()) {
-      Alert.alert('Required', 'Please enter your email address.');
-      return;
-    }
-    if (!password) {
-      Alert.alert('Required', 'Please enter your password.');
-      return;
-    }
+    if (!email.trim()) { Alert.alert('Required', 'Please enter your email address.'); return; }
+    if (!password)     { Alert.alert('Required', 'Please enter your password.'); return; }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-    if (error) {
-      Alert.alert('Sign In Failed', error.message);
-    }
-    // On success, the auth listener in _layout.tsx will redirect automatically
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) Alert.alert('Sign In Failed', error.message);
     setLoading(false);
   };
 
   return (
-    <View className="flex-1 bg-darkBg">
-      <StatusBar barStyle="dark-content" />
-
-      {/* Colorful mesh gradient blobs — subtle, sit behind everything */}
-      <View style={{ position: 'absolute', top: -80, left: -60, width: 260, height: 260 }} pointerEvents="none">
-        <LinearGradient
-          colors={['rgba(99,102,241,0.16)', 'rgba(99,102,241,0)']}
-          style={{ flex: 1, borderRadius: 130 }}
-        />
-      </View>
-      <View style={{ position: 'absolute', top: 120, right: -90, width: 240, height: 240 }} pointerEvents="none">
-        <LinearGradient
-          colors={['rgba(236,72,153,0.14)', 'rgba(236,72,153,0)']}
-          style={{ flex: 1, borderRadius: 120 }}
-        />
-      </View>
-      <View style={{ position: 'absolute', bottom: -60, left: 20, width: 200, height: 200 }} pointerEvents="none">
-        <LinearGradient
-          colors={['rgba(139,92,246,0.13)', 'rgba(139,92,246,0)']}
-          style={{ flex: 1, borderRadius: 100 }}
-        />
-      </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#6366f1" />
 
       <KeyboardAwareScrollView
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48 }}
+        contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
-        enableOnAndroid={true}
-        extraScrollHeight={100}
+        enableOnAndroid
+        extraScrollHeight={20}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Decorative NFC rings */}
-        <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
-          <Animated.View style={{ opacity: pulse3 }} className="absolute w-80 h-80 rounded-full border border-primary/5" />
-          <Animated.View style={{ opacity: pulse2 }} className="absolute w-56 h-56 rounded-full border border-primary/10" />
-          <Animated.View style={{ opacity: pulse1 }} className="absolute w-36 h-36 rounded-full border border-primary/20" />
-        </View>
-
-        {/* Logo */}
-        <View className="items-center mb-10">
-          <View className="w-16 h-16 bg-white border border-slate-200 rounded-2xl items-center justify-center mb-4 shadow-sm">
-            <Text className="text-3xl">📡</Text>
-          </View>
-          <Text className="text-slate-900 text-3xl font-black tracking-tight select-none">Lost & Found</Text>
-          <Text className="text-slate-500 text-sm mt-1 tracking-widest uppercase font-bold select-none">NFC Network</Text>
-        </View>
-
-        {/* Heading */}
-        <Text className="text-slate-900 text-4xl font-black text-center mb-2 select-none">Welcome Back</Text>
-        <Text className="text-slate-500 text-base text-center mb-10 px-4 font-medium select-none">
-          Sign in to protect your items{'\n'}and manage your network.
-        </Text>
-
-        {/* Form Card */}
-        <View
-          className="w-full bg-white border border-slate-200 rounded-3xl p-6 mb-4"
-          style={{ shadowColor: '#6366f1', shadowOpacity: 0.12, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 6 }}
+        {/* ── Gradient Header ── */}
+        <LinearGradient
+          colors={['#6366f1', '#7c3aed']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.header, { paddingTop: insets.top + 36 }]}
         >
-          {/* Email */}
-          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-2 font-bold select-none">Email</Text>
-          <View className="flex-row items-center bg-darkBg border border-slate-100 rounded-2xl px-4 mb-4 shadow-sm">
-            <Text className="text-slate-400 text-lg mr-3">✉️</Text>
-            <TextInput
-              className="flex-1 text-slate-900 text-base py-4 font-medium"
-              placeholder="your@email.com"
-              placeholderTextColor="#94a3b8"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoCorrect={false}
-              returnKeyType="next"
-              onSubmitEditing={() => passwordRef.current?.focus()}
-              blurOnSubmit={false}
-            />
-          </View>
+          <View style={styles.circle1} />
+          <View style={styles.circle2} />
 
-          {/* Password */}
-          <Text className="text-slate-500 text-xs uppercase tracking-wider mb-2 font-bold select-none">Password</Text>
-          <View className="flex-row items-center bg-darkBg border border-slate-100 rounded-2xl px-4 mb-2 shadow-sm">
-            <Text className="text-slate-400 text-lg mr-3">🔒</Text>
-            <TextInput
-              className="flex-1 text-slate-900 text-base py-4 font-medium"
-              placeholder="Enter your password"
-              placeholderTextColor="#64748b"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              ref={passwordRef}
-              returnKeyType="done"
-              onSubmitEditing={handleLogin}
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
-              <Text className="text-slate-500 text-sm font-bold">{showPassword ? 'Hide' : 'Show'}</Text>
+          <View style={styles.logoWrap}>
+            <Text style={styles.logoEmoji}>📡</Text>
+          </View>
+          <Text style={styles.appName}>Keepr</Text>
+          <Text style={styles.appTagline}>NFC Lost & Found Network</Text>
+          <Text style={styles.welcomeTitle}>Welcome back</Text>
+          <Text style={styles.welcomeSub}>
+            Sign in to protect your items{'\n'}and manage your network.
+          </Text>
+        </LinearGradient>
+
+        {/* ── White body (overlaps gradient with rounded top corners) ── */}
+        <View style={styles.body}>
+
+          {/* Floating card */}
+          <View style={styles.card}>
+
+            {/* Email */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Email address</Text>
+              <View style={[styles.inputRow, focusedField === 'email' && styles.inputRowFocused]}>
+                <Text style={styles.inputIcon}>✉️</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="your@email.com"
+                  placeholderTextColor="#94a3b8"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  blurOnSubmit={false}
+                />
+              </View>
+            </View>
+
+            {/* Password */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Password</Text>
+              <View style={[styles.inputRow, focusedField === 'password' && styles.inputRowFocused]}>
+                <Text style={styles.inputIcon}>🔒</Text>
+                <TextInput
+                  ref={passwordRef}
+                  style={styles.input}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#94a3b8"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  onSubmitEditing={handleLogin}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  activeOpacity={0.7}
+                  style={styles.showBtn}
+                >
+                  <Text style={styles.showBtnText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Forgot password */}
+            <TouchableOpacity
+              onPress={() => router.push('/forgot-password')}
+              activeOpacity={0.7}
+              style={styles.forgotWrap}
+            >
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+
+            {/* Sign In Button */}
+            <TouchableOpacity
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.88}
+              style={{ borderRadius: 16, overflow: 'hidden', marginTop: 8 }}
+            >
+              <LinearGradient
+                colors={loading ? ['#a5b4fc', '#c4b5fd'] : ['#6366f1', '#7c3aed']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.signInBtn}
+              >
+                {loading
+                  ? <ActivityIndicator color="#ffffff" />
+                  : <Text style={styles.signInBtnText}>Sign In  →</Text>
+                }
+              </LinearGradient>
             </TouchableOpacity>
           </View>
 
-          {/* Forgot Password */}
-          <TouchableOpacity
-            onPress={() => router.push('/forgot-password')}
-            className="self-end mb-5"
-            activeOpacity={0.7}
-          >
-            <Text className="text-primary text-sm font-bold">Forgot password?</Text>
-          </TouchableOpacity>
+          {/* Divider */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
-          {/* Sign In Button */}
+          {/* Create account */}
           <TouchableOpacity
-            className={`w-full bg-primary rounded-2xl py-4 items-center shadow-md shadow-primary/30 ${loading ? 'opacity-60' : ''}`}
-            onPress={handleLogin}
-            disabled={loading}
-            activeOpacity={0.85}
+            onPress={() => router.push('/registration')}
+            activeOpacity={0.7}
+            style={styles.createAccountBtn}
           >
-            <Text className="text-white font-bold text-lg tracking-wide">
-              {loading ? 'Signing in...' : 'Sign In'}
+            <Text style={styles.createAccountText}>
+              Don't have an account?{'  '}
+              <Text style={styles.createAccountLink}>Create one — it's free</Text>
             </Text>
           </TouchableOpacity>
-        </View>
 
-        {/* Divider */}
-        <View className="flex-row items-center w-full mb-4">
-          <View className="flex-1 h-px bg-slate-200" />
-          <Text className="text-slate-400 text-xs px-4 uppercase tracking-widest font-bold">or</Text>
-          <View className="flex-1 h-px bg-slate-200" />
-        </View>
-
-        {/* Sign Up Link */}
-        <TouchableOpacity
-          onPress={() => router.push('/registration')}
-          activeOpacity={0.7}
-          className="py-2"
-        >
-          <Text className="text-slate-600 text-base text-center font-medium">
-            Don't have an account?{'  '}
-            <Text className="text-primary font-bold">Create one — it's free</Text>
+          <Text style={[styles.termsText, { paddingBottom: insets.bottom + 24 }]}>
+            By signing in, you agree to our{' '}
+            <Text style={styles.termsLink}>Terms & Privacy Policy</Text>
           </Text>
-        </TouchableOpacity>
-
-        <Text className="text-slate-400 text-xs mt-10 text-center font-medium">
-          By signing in you agree to our Terms & Privacy Policy
-        </Text>
+        </View>
       </KeyboardAwareScrollView>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f8faff' },
+
+  /* ── Header ── */
+  header: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 60,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  circle1: {
+    position: 'absolute', top: -40, right: -40,
+    width: 180, height: 180, borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+  },
+  circle2: {
+    position: 'absolute', bottom: 10, left: -50,
+    width: 140, height: 140, borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  logoWrap: {
+    width: 68, height: 68, borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 10,
+  },
+  logoEmoji:    { fontSize: 32 },
+  appName:      { color: '#fff', fontSize: 26, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 },
+  appTagline:   { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '700', letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 28 },
+  welcomeTitle: { color: '#fff', fontSize: 34, fontWeight: '900', letterSpacing: -0.5, marginBottom: 8 },
+  welcomeSub:   { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '500', textAlign: 'center', lineHeight: 21 },
+
+  /* ── Body: white rounded-top sheet overlapping gradient ── */
+  body: {
+    flex: 1,
+    backgroundColor: '#f8faff',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    marginTop: -28,
+    paddingHorizontal: 18,
+    paddingTop: 24,
+  },
+
+  /* ── Form card ── */
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24, padding: 22, marginBottom: 16,
+    shadowColor: '#6366f1', shadowOpacity: 0.10, shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 }, elevation: 5,
+    borderWidth: 1, borderColor: '#f1f5f9',
+  },
+
+  /* ── Fields ── */
+  fieldGroup:      { marginBottom: 16 },
+  label:           { color: '#64748b', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.9, marginBottom: 7 },
+  inputRow:        { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8faff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14 },
+  inputRowFocused: { borderColor: '#6366f1', backgroundColor: '#eef2ff' },
+  inputIcon:       { fontSize: 16, marginRight: 10 },
+  input:           { flex: 1, color: '#0f172a', fontSize: 15, fontWeight: '500', paddingVertical: 14 },
+  showBtn:         { paddingLeft: 8, paddingVertical: 4 },
+  showBtnText:     { color: '#6366f1', fontWeight: '700', fontSize: 13 },
+  forgotWrap:      { alignSelf: 'flex-end', marginBottom: 4, marginTop: -6 },
+  forgotText:      { color: '#6366f1', fontWeight: '700', fontSize: 13 },
+
+  /* ── Sign In button ── */
+  signInBtn:     { paddingVertical: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
+  signInBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
+
+  /* ── Divider ── */
+  dividerRow:  { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#e2e8f0' },
+  dividerText: { color: '#94a3b8', fontSize: 11, fontWeight: '700', letterSpacing: 1.5, marginHorizontal: 12 },
+
+  /* ── Bottom links ── */
+  createAccountBtn:  { alignItems: 'center', paddingVertical: 4, marginBottom: 20 },
+  createAccountText: { color: '#64748b', fontSize: 15, fontWeight: '500' },
+  createAccountLink: { color: '#6366f1', fontWeight: '800' },
+  termsText:         { color: '#94a3b8', fontSize: 12, textAlign: 'center', lineHeight: 18 },
+  termsLink:         { color: '#6366f1', fontWeight: '600' },
+});
