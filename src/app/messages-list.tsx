@@ -4,6 +4,7 @@ import {
   StatusBar, Animated, ActivityIndicator, Alert, LayoutAnimation,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 
@@ -80,9 +81,16 @@ export function MessagesList() {
     }
 
     if (data) {
-      // For each conversation, fetch last message + community item name in parallel
+      // Load locally-cleared IDs so we can hide them even if the DB delete
+      // hasn't taken effect yet (e.g. before migration 015 is applied).
+      const clearedRaw = await AsyncStorage.getItem(`@cleared_convs_${user.id}`);
+      const clearedIds: string[] = clearedRaw ? JSON.parse(clearedRaw) : [];
+
+      // Filter out cleared conversations and enrich with last message + CI name
+      const visible = (data as ConversationRow[]).filter(c => !clearedIds.includes(c.id));
+
       const withMessages = await Promise.all(
-        (data as ConversationRow[]).map(async (conv) => {
+        visible.map(async (conv) => {
           const [msgRes, ciRes] = await Promise.all([
             supabase.from('messages').select('body').eq('conversation_id', conv.id).order('created_at', { ascending: false }).limit(1),
             conv.community_item_id
@@ -112,18 +120,31 @@ export function MessagesList() {
     if (!uid || conversations.length === 0) return;
     Alert.alert(
       'Clear All Messages',
-      'This will permanently delete all your conversations and messages. Are you sure?',
+      'Remove all conversations from your inbox?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Clear All',
           style: 'destructive',
           onPress: async () => {
-            // Delete conversations where user is owner or finder
+            const ids = conversations.map(c => c.id);
+
+            // 1. Persist the cleared IDs locally so they stay hidden after
+            //    useFocusEffect refetches (works even without the DB delete policy).
+            const existing = await AsyncStorage.getItem(`@cleared_convs_${uid}`);
+            const prev: string[] = existing ? JSON.parse(existing) : [];
+            await AsyncStorage.setItem(
+              `@cleared_convs_${uid}`,
+              JSON.stringify([...new Set([...prev, ...ids])])
+            );
+
+            // 2. Attempt real DB deletion (requires migration 015 to be applied).
+            //    Silent failure is OK — the AsyncStorage filter above handles it.
             await Promise.all([
               supabase.from('conversations').delete().eq('owner_id', uid),
               supabase.from('conversations').delete().eq('finder_user_id', uid),
             ]);
+
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
             setConversations([]);
           },
