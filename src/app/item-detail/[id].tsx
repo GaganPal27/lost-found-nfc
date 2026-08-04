@@ -1,24 +1,26 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, ActivityIndicator, ScrollView, TouchableOpacity,
-  Alert, Switch, StatusBar, Linking,
+  Alert, Switch, StatusBar, Linking, StyleSheet,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useItemStore } from '../../stores/itemStore';
 import { useSubscriptionStore } from '../../stores/subscriptionStore';
-import EntitlementGate from '../../components/subscription/EntitlementGate';
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; border: string; dot: string }> = {
-  active:  { label: 'ACTIVE',  color: 'bg-green-100',  border: 'border-green-200',  dot: 'bg-green-500'  },
-  lost:    { label: 'LOST',    color: 'bg-red-100',    border: 'border-red-200',    dot: 'bg-red-500'    },
-  found:   { label: 'FOUND',   color: 'bg-blue-100',   border: 'border-blue-200',   dot: 'bg-blue-500'   },
+const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
+  active:  { label: 'ACTIVE', bg: '#dcfce7', text: '#16a34a', dot: '#22c55e' },
+  lost:    { label: 'LOST',   bg: '#fee2e2', text: '#dc2626', dot: '#ef4444' },
+  found:   { label: 'FOUND',  bg: '#dbeafe', text: '#2563eb', dot: '#3b82f6' },
 };
 
 export default function ItemDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { deleteItem, updateStatus } = useItemStore();
   const { tier } = useSubscriptionStore();
 
@@ -35,7 +37,6 @@ export default function ItemDetailScreen() {
         setItem(itemData);
         setStatus(itemData.status);
 
-        // Reverse geocode last known location → human-readable address
         if (itemData.last_seen_lat && itemData.last_seen_lng) {
           try {
             const results = await Location.reverseGeocodeAsync({
@@ -48,7 +49,7 @@ export default function ItemDetailScreen() {
               setLocationAddress(parts.join(', '));
             }
           } catch {
-            // non-fatal – fall back to coordinates
+            // non-fatal
           }
         }
 
@@ -94,149 +95,219 @@ export default function ItemDetailScreen() {
     });
   };
 
-  // Open native Maps app at the last known location
-  const openInMaps = () => {
-    if (!item?.last_seen_lat || !item?.last_seen_lng) return;
-    const lat = item.last_seen_lat;
-    const lng = item.last_seen_lng;
-    const label = encodeURIComponent(item.item_name || 'Lost Item');
-    // Works on both Android (Google Maps intent) and iOS (Apple Maps)
-    const url = `geo:${lat},${lng}?q=${lat},${lng}(${label})`;
-    const fallbackUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-    Linking.canOpenURL(url)
-      .then(supported => Linking.openURL(supported ? url : fallbackUrl))
-      .catch(() => Linking.openURL(fallbackUrl));
-  };
-
   if (loading) return (
-    <View className="flex-1 bg-slate-50 justify-center items-center">
-      <ActivityIndicator size="large" color="#e11d48" />
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#6366f1" />
     </View>
   );
   if (!item) return (
-    <View className="flex-1 bg-slate-50 justify-center items-center">
-      <Text className="text-slate-500">Item not found</Text>
+    <View style={styles.loadingContainer}>
+      <Text style={styles.notFoundText}>Item not found</Text>
     </View>
   );
 
   const sc = STATUS_CONFIG[status] || STATUS_CONFIG.active;
-  const hasLocation = item.last_seen_lat && item.last_seen_lng;
+  const isLost = status === 'lost';
 
   return (
-    <View className="flex-1 bg-slate-50">
-      <StatusBar barStyle="dark-content" />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 60, paddingTop: 60 }}>
-        {/* Back */}
-        <TouchableOpacity onPress={() => router.back()} className="mb-6 flex-row items-center" activeOpacity={0.7}>
-          <Text className="text-primary text-lg mr-1">←</Text>
-          <Text className="text-primary font-semibold">My Items</Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#6366f1" />
+
+      {/* ── Gradient Header ── */}
+      <LinearGradient
+        colors={isLost ? ['#f43f5e', '#be123c'] : ['#6366f1', '#7c3aed']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + 16 }]}
+      >
+        <View style={styles.hCircle1} />
+        <View style={styles.hCircle2} />
+
+        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={styles.backBtn}>
+          <Text style={styles.backBtnText}>← Back</Text>
         </TouchableOpacity>
 
-        {/* Title Row */}
-        <View className="flex-row justify-between items-start mb-3">
-          <Text className="text-slate-900 text-3xl font-black flex-1 mr-4" numberOfLines={2}>{item.item_name}</Text>
-          <View className="flex-row items-center gap-2">
-            <TouchableOpacity
-              onPress={() => router.push(`/edit-item/${id}`)}
-              className="bg-primary/10 border border-primary/20 px-4 py-2 rounded-xl"
-              activeOpacity={0.7}
-            >
-              <Text className="text-primary font-bold text-sm">Edit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleDelete}
-              className="bg-red-50 border border-red-200 px-4 py-2 rounded-xl"
-              activeOpacity={0.7}
-            >
-              <Text className="text-red-600 font-bold text-sm">Delete</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.headerTitleRow}>
+          <Text style={styles.headerTitle} numberOfLines={2}>{item.item_name}</Text>
         </View>
 
-        {/* Tags Row */}
-        <View className="flex-row items-center mb-6 gap-2">
-          <View className={`flex-row items-center px-3 py-1.5 rounded-full border ${sc.color} ${sc.border}`}>
-            <View className={`w-2 h-2 rounded-full mr-2 ${sc.dot}`} />
-            <Text className={`text-xs font-bold tracking-widest ${sc.dot.replace('bg-', 'text-').replace('-500', '-700')}`}>
-              {sc.label}
-            </Text>
-          </View>
-          <View className="bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm">
-            <Text className="text-slate-500 text-xs font-bold uppercase tracking-wider">
-              {item.tag_type.replace(/_/g, ' ')}
-            </Text>
-          </View>
-          <View className="bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm">
-            <Text className="text-slate-600 text-xs font-medium">{item.category}</Text>
-          </View>
+        {/* Action Buttons */}
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => router.push(`/edit-item/${id}`)} activeOpacity={0.8} style={styles.headerBtn}>
+            <Text style={styles.headerBtnText}>Edit Item</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleDelete} activeOpacity={0.8} style={styles.headerBtnDanger}>
+            <Text style={styles.headerBtnDangerText}>Delete</Text>
+          </TouchableOpacity>
         </View>
+      </LinearGradient>
 
-        {/* Lost Mode Toggle */}
-        <View className="bg-white border border-slate-200 rounded-3xl p-5 mb-5 shadow-sm">
-          <View className="flex-row justify-between items-center">
-            <View className="flex-1 pr-4">
-              <Text className="text-slate-900 font-bold text-base mb-1">Lost Mode</Text>
-              <Text className="text-slate-500 text-sm leading-5 font-medium">
-                When enabled, finders will see your contact details when they scan this tag.
-              </Text>
+      {/* ── Body ── */}
+      <View style={styles.body}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          
+          {/* Tags Row */}
+          <View style={styles.tagsRow}>
+            <View style={[styles.statusTag, { backgroundColor: sc.bg }]}>
+              <View style={[styles.statusTagDot, { backgroundColor: sc.dot }]} />
+              <Text style={[styles.statusTagText, { color: sc.text }]}>{sc.label}</Text>
             </View>
-            <Switch
-              value={status === 'lost'}
-              onValueChange={(v) => handleUpdateStatus(v ? 'lost' : 'active')}
-              trackColor={{ true: '#fca5a5', false: '#e2e8f0' }}
-              thumbColor={status === 'lost' ? '#ef4444' : '#94a3b8'}
-            />
+            <View style={styles.metaBadge}>
+              <Text style={styles.metaBadgeText}>{item.tag_type.replace(/_/g, ' ')}</Text>
+            </View>
+            <View style={styles.metaBadge}>
+              <Text style={styles.metaBadgeText}>{item.category}</Text>
+            </View>
           </View>
-          {status === 'lost' && (
-            <View className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-3">
-              <Text className="text-red-700 text-xs font-bold text-center">
-                🔴 LOST MODE ACTIVE — Finders can contact you
-              </Text>
-            </View>
-          )}
-        </View>
 
-        {/* Removed Passive Tracking Map for now */}
-
-        {/* NFC Scan History */}
-        <Text className="text-slate-900 text-base font-bold mb-3">NFC Scan History</Text>
-        <View className="bg-white border border-slate-200 rounded-3xl overflow-hidden mb-5 shadow-sm">
-          {scans.length === 0 ? (
-            <View className="p-6 items-center">
-              <Text className="text-slate-500 text-sm font-bold">No recent scans found</Text>
-              <Text className="text-slate-400 text-xs mt-1 font-medium">Scans appear here when someone taps your tag</Text>
-            </View>
-          ) : (
-            scans.map((scan, i) => (
-              <View key={scan.id} className={`p-4 flex-row items-center ${i !== scans.length - 1 ? 'border-b border-slate-100' : ''}`}>
-                <View className="w-10 h-10 bg-slate-100 rounded-xl items-center justify-center mr-4">
-                  <Text className="text-xl">📍</Text>
-                </View>
-                <View className="flex-1">
-                  <Text className="text-slate-900 font-semibold text-sm">{scan.location_label || 'Unknown location'}</Text>
-                  <Text className="text-slate-500 text-xs mt-0.5 font-medium">{new Date(scan.scanned_at).toLocaleString()}</Text>
-                </View>
+          {/* Lost Mode Toggle */}
+          <View style={[styles.card, isLost && styles.cardLost]}>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleInfo}>
+                <Text style={styles.cardTitle}>Lost Mode</Text>
+                <Text style={styles.cardSub}>
+                  When enabled, finders will see your contact details when they scan this tag.
+                </Text>
               </View>
-            ))
-          )}
-          {scans.length > 0 && tier === 'basic' && (
-            <View className="bg-amber-50 border-t border-amber-200 p-3 items-center">
-              <Text className="text-amber-700 text-xs font-bold uppercase tracking-wide">
-                Showing 7-day history · Upgrade for 30 days
-              </Text>
+              <Switch
+                value={isLost}
+                onValueChange={(v) => handleUpdateStatus(v ? 'lost' : 'active')}
+                trackColor={{ true: '#fda4af', false: '#e2e8f0' }}
+                thumbColor={isLost ? '#f43f5e' : '#94a3b8'}
+              />
             </View>
-          )}
-        </View>
+            {isLost && (
+              <View style={styles.lostAlert}>
+                <Text style={styles.lostAlertText}>🔴 LOST MODE ACTIVE — Finders can contact you</Text>
+              </View>
+            )}
+          </View>
 
-        {/* Re-program Tag */}
-        <TouchableOpacity
-          onPress={handleRewrite}
-          className="bg-white border border-primary/30 p-4 rounded-2xl items-center mb-4 shadow-sm"
-          activeOpacity={0.7}
-        >
-          <Text className="text-primary font-bold text-base">↺ Re-program Tag</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          {/* NFC Scan History */}
+          <Text style={styles.sectionTitle}>NFC Scan History</Text>
+          <View style={styles.card}>
+            {scans.length === 0 ? (
+              <View style={styles.emptyScans}>
+                <Text style={styles.emptyScansTitle}>No recent scans found</Text>
+                <Text style={styles.emptyScansSub}>Scans appear here when someone taps your tag</Text>
+              </View>
+            ) : (
+              scans.map((scan, i) => (
+                <View key={scan.id} style={[styles.scanRow, i !== scans.length - 1 && styles.scanRowBorder]}>
+                  <View style={styles.scanIconWrap}>
+                    <Text style={styles.scanIcon}>📍</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.scanLoc}>{scan.location_label || 'Unknown location'}</Text>
+                    <Text style={styles.scanDate}>{new Date(scan.scanned_at).toLocaleString()}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+            {scans.length > 0 && tier === 'basic' && (
+              <View style={styles.upsellBar}>
+                <Text style={styles.upsellText}>Showing 7-day history · Upgrade for 30 days</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Re-program Tag */}
+          <TouchableOpacity onPress={handleRewrite} activeOpacity={0.88} style={styles.reprogramBtn}>
+            <Text style={styles.reprogramBtnText}>↺ Re-program Tag</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f8faff' },
+  loadingContainer: { flex: 1, backgroundColor: '#f8faff', justifyContent: 'center', alignItems: 'center' },
+  notFoundText: { color: '#64748b', fontSize: 16, fontWeight: '500' },
+
+  /* ── Header ── */
+  header: {
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  hCircle1: { position: 'absolute', top: -30, right: -30, width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.08)' },
+  hCircle2: { position: 'absolute', bottom: -20, left: -40, width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(255,255,255,0.06)' },
+  
+  backBtn: { alignSelf: 'flex-start', paddingVertical: 8, marginBottom: 8 },
+  backBtnText: { color: 'rgba(255,255,255,0.9)', fontSize: 15, fontWeight: '700' },
+
+  headerTitleRow: { marginBottom: 16 },
+  headerTitle: { color: '#ffffff', fontSize: 32, fontWeight: '900', letterSpacing: -0.5 },
+
+  headerActions: { flexDirection: 'row', gap: 10 },
+  headerBtn: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12,
+  },
+  headerBtnText: { color: '#ffffff', fontSize: 13, fontWeight: '700' },
+  headerBtnDanger: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12,
+  },
+  headerBtnDangerText: { color: '#e11d48', fontSize: 13, fontWeight: '800' },
+
+  /* ── Body ── */
+  body: {
+    flex: 1,
+    backgroundColor: '#f8faff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -24,
+  },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 60 },
+
+  tagsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 24, gap: 8 },
+  statusTag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  statusTagDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
+  statusTagText: { fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  
+  metaBadge: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
+  metaBadgeText: { color: '#64748b', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  /* Cards */
+  card: {
+    backgroundColor: '#ffffff', borderRadius: 22, padding: 20, marginBottom: 24,
+    shadowColor: '#6366f1', shadowOpacity: 0.08, shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 }, elevation: 3,
+    borderWidth: 1, borderColor: '#f1f5f9',
+  },
+  cardLost: { borderColor: '#fda4af', shadowColor: '#f43f5e', shadowOpacity: 0.15 },
+  cardTitle: { color: '#0f172a', fontWeight: '800', fontSize: 16, marginBottom: 4 },
+  cardSub: { color: '#64748b', fontSize: 13, lineHeight: 19, fontWeight: '500' },
+  
+  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  toggleInfo: { flex: 1, paddingRight: 16 },
+  
+  lostAlert: { marginTop: 16, backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#ffe4e6', borderRadius: 14, padding: 12 },
+  lostAlertText: { color: '#e11d48', fontSize: 12, fontWeight: '800', textAlign: 'center' },
+
+  sectionTitle: { color: '#0f172a', fontSize: 16, fontWeight: '800', marginBottom: 12, marginLeft: 4 },
+
+  /* Scans */
+  emptyScans: { paddingVertical: 24, alignItems: 'center' },
+  emptyScansTitle: { color: '#64748b', fontSize: 14, fontWeight: '700' },
+  emptyScansSub: { color: '#94a3b8', fontSize: 12, marginTop: 4, fontWeight: '500' },
+  
+  scanRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
+  scanRowBorder: { borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  scanIconWrap: { width: 40, height: 40, backgroundColor: '#f8faff', borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  scanIcon: { fontSize: 18 },
+  scanLoc: { color: '#0f172a', fontWeight: '700', fontSize: 14, marginBottom: 2 },
+  scanDate: { color: '#64748b', fontSize: 12, fontWeight: '500' },
+  
+  upsellBar: { backgroundColor: '#fffbeb', borderTopWidth: 1, borderTopColor: '#fef3c7', marginHorizontal: -20, marginBottom: -20, padding: 12, borderBottomLeftRadius: 22, borderBottomRightRadius: 22, alignItems: 'center', marginTop: 10 },
+  upsellText: { color: '#d97706', fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  /* Reprogram button */
+  reprogramBtn: { backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e0e7ff', padding: 16, borderRadius: 18, alignItems: 'center', shadowColor: '#6366f1', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  reprogramBtnText: { color: '#6366f1', fontSize: 15, fontWeight: '800' },
+});
