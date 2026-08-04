@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView, Image,
+  View, Text, TextInput, TouchableOpacity, Image, ScrollView,
   ActivityIndicator, Alert, StatusBar, StyleSheet,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -202,7 +203,13 @@ export default function RegisterItemScreen() {
 
       {/* ── Body ── */}
       <View style={styles.body}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <KeyboardAwareScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          enableOnAndroid
+          extraScrollHeight={20}
+        >
           
           {/* Image Picker */}
           <TouchableOpacity
@@ -323,7 +330,7 @@ export default function RegisterItemScreen() {
             </LinearGradient>
           </TouchableOpacity>
 
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </View>
     </View>
   );
