@@ -74,7 +74,7 @@ export default function FinderConnectScreen() {
     }
   };
 
-  // ── Send notification & create conversation ─────────────────────────────────
+  // ── Send notification & create / resume conversation ────────────────────────
   const handleSend = async () => {
     if (!finderName.trim()) {
       Alert.alert('Required', 'Please enter your name so the owner can reach you.');
@@ -90,34 +90,53 @@ export default function FinderConnectScreen() {
       // owner_id (route param) is the profile-table id. conversations.owner_id
       // and push_tokens.user_id both expect the AUTH id — a different UUID for
       // the same person — so resolve it before using it anywhere below.
-      // Can't just SELECT the users row directly: own_user_read RLS correctly
-      // blocks reading anyone else's row, so this goes through a narrow
-      // SECURITY DEFINER function that exposes only the one UUID needed.
       const { data: ownerAuthId, error: ownerErr } = await supabase
         .rpc('get_user_auth_id', { profile_id: owner_id });
       if (ownerErr || !ownerAuthId) {
         throw new Error('Could not resolve item owner. Please try again.');
       }
 
-      // 1. Create conversation
-      const { data: conv, error: convError } = await supabase
-        .from('conversations')
-        .insert({
-          item_id,
-          owner_id: ownerAuthId,
-          finder_user_id: user?.id ?? null,
-          finder_name: finderName.trim(),
-          finder_phone: finderPhone.trim() || null,
-          scan_lat: coords?.lat ?? null,
-          scan_lng: coords?.lng ?? null,
-          scan_location: locationLabel,
-        })
-        .select()
-        .single();
+      // ── 1. Check for an existing open conversation ─────────────────────────
+      // Prevent duplicate threads: if this finder already has an open conversation
+      // for the same item, reuse it instead of creating a new one.
+      let conv: { id: string } | null = null;
 
-      if (convError || !conv) throw convError ?? new Error('Could not create conversation');
+      if (user?.id) {
+        // Logged-in finder: match on item_id + finder_user_id
+        const { data: existing } = await supabase
+          .from('conversations')
+          .select('id')
+          .eq('item_id', item_id)
+          .eq('finder_user_id', user.id)
+          .eq('resolved', false)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (existing) conv = existing;
+      }
 
-      // 2. Insert initial message
+      // ── 2. Create a new conversation only if none found ────────────────────
+      if (!conv) {
+        const { data: newConv, error: convError } = await supabase
+          .from('conversations')
+          .insert({
+            item_id,
+            owner_id: ownerAuthId,
+            finder_user_id: user?.id ?? null,
+            finder_name: finderName.trim(),
+            finder_phone: finderPhone.trim() || null,
+            scan_lat: coords?.lat ?? null,
+            scan_lng: coords?.lng ?? null,
+            scan_location: locationLabel,
+          })
+          .select()
+          .single();
+
+        if (convError || !newConv) throw convError ?? new Error('Could not create conversation');
+        conv = newConv;
+      }
+
+      // ── 3. Insert the message into the conversation ────────────────────────
       const { error: msgError } = await supabase.from('messages').insert({
         conversation_id: conv.id,
         sender_id: user?.id ?? null,
@@ -126,9 +145,7 @@ export default function FinderConnectScreen() {
       });
       if (msgError) Sentry.captureMessage(`finder-connect: message insert failed: ${msgError.message}`, 'warning');
 
-      // 3. Insert in-app notification via SECURITY DEFINER function — bypasses RLS which
-      //    only allows self-inserts. A finder is a different auth identity from the owner.
-      //    p_owner_id accepts auth UUID; the function resolves to profile UUID internally.
+      // ── 4. In-app notification for the owner ──────────────────────────────
       const { error: notifError } = await supabase.rpc('create_item_notification', {
         p_owner_id: ownerAuthId,
         p_type: 'nfc_tap',
@@ -144,10 +161,7 @@ export default function FinderConnectScreen() {
       });
       if (notifError) Sentry.captureMessage(`finder-connect: notification insert failed: ${notifError.message}`, 'warning');
 
-      // 4. Call push notification edge function (needs the AUTH id, like conversations.owner_id)
-      // This was previously fire-and-forget, so a failed/empty push (no token, Edge
-      // Function error, Expo API rejection) was invisible and the UI showed "Owner Notified!"
-      // regardless. Now the actual result is captured and sent to Sentry.
+      // ── 5. Push notification ──────────────────────────────────────────────
       const { data: pushResult, error: pushError } = await supabase.functions.invoke('send-push-notification', {
         body: {
           owner_id: ownerAuthId,
@@ -182,6 +196,7 @@ export default function FinderConnectScreen() {
       setLoading(false);
     }
   };
+
 
   const stepConfig = {
     confirm: { title: 'Found Something?', emoji: '🔍', sub: `You scanned a Lost & Found tag for\n"${item_name}"` },
