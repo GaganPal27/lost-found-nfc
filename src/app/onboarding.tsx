@@ -1,121 +1,157 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Animated } from 'react-native';
+import React, { useState, useRef } from 'react';
+import {
+  View, Text, TouchableOpacity, StyleSheet,
+  Dimensions, StatusBar, Animated, FlatList,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const SLIDES = [
   {
-    title: 'Tag it.',
-    description: 'Attach an NFC or BLE tag to your most valuable items (wallet, keys, bags).',
     emoji: '🏷️',
-    bg: '#E0E7FF',
-    color: '#4338ca',
+    title: 'Tag it.',
+    description: 'Attach an NFC or BLE tag to your most valuable items — wallet, keys, bag.',
+    gradientColors: ['#6366f1', '#7c3aed'] as const,
+    accentBg: 'rgba(255,255,255,0.15)',
   },
   {
-    title: 'Community finds it.',
-    description: 'If lost, anyone who finds it can scan the tag with their phone to notify you instantly.',
     emoji: '📱',
-    bg: '#DCFCE7',
-    color: '#15803d',
+    title: 'Community finds it.',
+    description: 'If lost, anyone who finds it can tap the tag with their phone to notify you instantly.',
+    gradientColors: ['#0ea5e9', '#6366f1'] as const,
+    accentBg: 'rgba(255,255,255,0.15)',
   },
   {
-    title: "Prove it's yours, get it back.",
-    description: 'Answer your secret proof question to securely claim your item and arrange a safe return.',
     emoji: '🔐',
-    bg: '#F3E8FF',
-    color: '#7e22ce',
+    title: "Prove it's yours,\nget it back.",
+    description: 'Securely connect with the finder and arrange a safe return — all within the app.',
+    gradientColors: ['#7c3aed', '#ec4899'] as const,
+    accentBg: 'rgba(255,255,255,0.15)',
   },
 ];
 
 export default function OnboardingScreen() {
-  const router = useRouter();
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const scrollX = React.useRef(new Animated.Value(0)).current;
-  const slideRef = React.useRef(null);
+  const router       = useRouter();
+  const insets       = useSafeAreaInsets();
+  const [index, setIndex] = useState(0);
+  const scrollX      = useRef(new Animated.Value(0)).current;
+  const flatListRef  = useRef<FlatList>(null);
 
-  const viewableItemsChanged = React.useRef(({ viewableItems }: any) => {
-    if (viewableItems && viewableItems.length > 0) {
-      setCurrentIndex(viewableItems[0].index);
-    }
+  const onViewRef = useRef(({ viewableItems }: any) => {
+    if (viewableItems?.length > 0) setIndex(viewableItems[0].index ?? 0);
   }).current;
-
-  const viewConfig = React.useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
+  const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
   const handleNext = async () => {
-    if (currentIndex < SLIDES.length - 1) {
-      (slideRef.current as any)?.scrollToIndex({ index: currentIndex + 1 });
+    if (index < SLIDES.length - 1) {
+      flatListRef.current?.scrollToIndex({ index: index + 1 });
     } else {
-      try {
-        await AsyncStorage.setItem('hasSeenOnboarding', 'true');
-        router.replace('/(tabs)/my-items');
-      } catch (e) {
-        console.error('Error saving onboarding flag:', e);
-      }
+      try { await AsyncStorage.setItem('hasSeenOnboarding', 'true'); } catch (_) {}
+      router.replace('/(tabs)/my-items');
     }
+  };
+
+  const handleSkip = async () => {
+    try { await AsyncStorage.setItem('hasSeenOnboarding', 'true'); } catch (_) {}
+    router.replace('/login');
   };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <View style={{ flex: 3 }}>
-        <Animated.FlatList
-          data={SLIDES}
-          renderItem={({ item }) => (
-            <View style={[styles.slide, { width }]}>
-              <View style={[styles.emojiContainer, { backgroundColor: item.bg }]}>
+      <StatusBar barStyle="light-content" />
+
+      {/* Full-screen slides */}
+      <Animated.FlatList
+        ref={flatListRef}
+        data={SLIDES}
+        keyExtractor={(_, i) => String(i)}
+        horizontal
+        pagingEnabled
+        bounces={false}
+        showsHorizontalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: false }
+        )}
+        onViewableItemsChanged={onViewRef}
+        viewabilityConfig={viewConfig}
+        scrollEventThrottle={16}
+        renderItem={({ item }) => (
+          <LinearGradient
+            colors={item.gradientColors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.slide, { paddingTop: insets.top + 20 }]}
+          >
+            {/* Decorative circles */}
+            <View style={styles.circle1} />
+            <View style={styles.circle2} />
+            <View style={styles.circle3} />
+
+            {/* Content */}
+            <View style={styles.slideContent}>
+              {/* App brand on first slide */}
+              {item === SLIDES[0] && (
+                <View style={styles.brandRow}>
+                  <Text style={styles.brandName}>Keepr</Text>
+                  <View style={styles.brandBadge}>
+                    <Text style={styles.brandBadgeText}>NFC</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Emoji icon */}
+              <View style={[styles.emojiWrap, { backgroundColor: item.accentBg }]}>
                 <Text style={styles.emoji}>{item.emoji}</Text>
               </View>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.description}>{item.description}</Text>
-            </View>
-          )}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          pagingEnabled
-          bounces={false}
-          keyExtractor={(item) => item.title}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
-            useNativeDriver: false,
-          })}
-          onViewableItemsChanged={viewableItemsChanged}
-          viewabilityConfig={viewConfig}
-          scrollEventThrottle={32}
-          ref={slideRef}
-        />
-      </View>
 
-      <View style={styles.bottomContainer}>
-        <View style={styles.paginator}>
+              <Text style={styles.slideTitle}>{item.title}</Text>
+              <Text style={styles.slideDesc}>{item.description}</Text>
+            </View>
+          </LinearGradient>
+        )}
+      />
+
+      {/* Bottom controls — white rounded sheet */}
+      <View style={[styles.bottom, { paddingBottom: insets.bottom + 24 }]}>
+        {/* Dots */}
+        <View style={styles.dots}>
           {SLIDES.map((_, i) => {
             const inputRange = [(i - 1) * width, i * width, (i + 1) * width];
-            const dotWidth = scrollX.interpolate({
-              inputRange,
-              outputRange: [10, 20, 10],
-              extrapolate: 'clamp',
-            });
-            const opacity = scrollX.interpolate({
-              inputRange,
-              outputRange: [0.3, 1, 0.3],
-              extrapolate: 'clamp',
-            });
+            const dotW = scrollX.interpolate({ inputRange, outputRange: [8, 22, 8], extrapolate: 'clamp' });
+            const op   = scrollX.interpolate({ inputRange, outputRange: [0.3, 1, 0.3], extrapolate: 'clamp' });
             return (
-              <Animated.View
-                style={[styles.dot, { width: dotWidth, opacity }]}
-                key={i.toString()}
-              />
+              <Animated.View key={i} style={[styles.dot, { width: dotW, opacity: op }]} />
             );
           })}
         </View>
 
-        <TouchableOpacity onPress={handleNext} activeOpacity={0.8}>
-          <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.btn}>
-            <Text style={styles.btnText}>
-              {currentIndex === SLIDES.length - 1 ? "Let's Go 🚀" : 'Next'}
+        {/* Next / Get Started button */}
+        <TouchableOpacity onPress={handleNext} activeOpacity={0.88} style={{ borderRadius: 18, overflow: 'hidden' }}>
+          <LinearGradient
+            colors={['#6366f1', '#7c3aed']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.nextBtn}
+          >
+            <Text style={styles.nextBtnText}>
+              {index === SLIDES.length - 1 ? "Let's Go  🚀" : 'Next  →'}
             </Text>
           </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Skip / Sign In link */}
+        <TouchableOpacity onPress={handleSkip} activeOpacity={0.7} style={styles.skipBtn}>
+          <Text style={styles.skipText}>
+            {index === SLIDES.length - 1
+              ? 'Already have an account?  '
+              : 'Skip  '}
+            <Text style={styles.skipHighlight}>Sign In</Text>
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -123,72 +159,59 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
+  container: { flex: 1, backgroundColor: '#f8faff' },
+
+  /* Slide */
   slide: {
-    flex: 1,
+    width, flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    overflow: 'hidden',
+    position: 'relative',
+    paddingHorizontal: 32,
+    paddingBottom: 40,
   },
-  emojiContainer: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 40,
+  circle1: { position: 'absolute', top: -60, right: -60, width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(255,255,255,0.08)' },
+  circle2: { position: 'absolute', bottom: 60, left: -80, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.06)' },
+  circle3: { position: 'absolute', top: 80,   right: 20,  width: 90,  height: 90,  borderRadius: 45,  backgroundColor: 'rgba(255,255,255,0.05)' },
+
+  slideContent: { alignItems: 'center', zIndex: 1 },
+
+  /* Brand row (slide 1 only) */
+  brandRow:        { flexDirection: 'row', alignItems: 'center', marginBottom: 40, gap: 10 },
+  brandName:       { color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: 0.5 },
+  brandBadge:      { backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3 },
+  brandBadgeText:  { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
+
+  /* Emoji */
+  emojiWrap: {
+    width: 130, height: 130, borderRadius: 65,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 36,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  emoji: {
-    fontSize: 70,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#0f172a',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  description: {
-    fontSize: 16,
-    color: '#64748b',
-    textAlign: 'center',
-    lineHeight: 24,
-    paddingHorizontal: 20,
-    fontWeight: '500',
-  },
-  bottomContainer: {
+  emoji: { fontSize: 64 },
+
+  slideTitle: { color: '#fff', fontSize: 30, fontWeight: '900', textAlign: 'center', lineHeight: 38, marginBottom: 16, letterSpacing: -0.5 },
+  slideDesc:  { color: 'rgba(255,255,255,0.85)', fontSize: 15, fontWeight: '500', textAlign: 'center', lineHeight: 23 },
+
+  /* Bottom sheet */
+  bottom: {
+    backgroundColor: '#f8faff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -24,
     paddingHorizontal: 24,
-    paddingBottom: 60,
-    paddingTop: 20,
+    paddingTop: 28,
   },
-  paginator: {
-    flexDirection: 'row',
-    height: 64,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dot: {
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#6366f1',
-    marginHorizontal: 8,
-  },
-  btn: {
-    paddingVertical: 18,
-    borderRadius: 24,
-    alignItems: 'center',
-    shadowColor: '#6366f1',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 8,
-  },
-  btnText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '800',
-  },
+  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 24, gap: 6 },
+  dot:  { height: 8, borderRadius: 4, backgroundColor: '#6366f1' },
+
+  nextBtn:     { paddingVertical: 17, alignItems: 'center', borderRadius: 18 },
+  nextBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+
+  skipBtn:       { alignItems: 'center', paddingTop: 16 },
+  skipText:      { color: '#64748b', fontSize: 14, fontWeight: '500' },
+  skipHighlight: { color: '#6366f1', fontWeight: '800' },
 });
