@@ -1,82 +1,98 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, Alert, Animated,
-  StatusBar, ScrollView, StyleSheet,
+  View, Text, TextInput, TouchableOpacity, Alert,
+  StatusBar, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import * as Location from 'expo-location';
 import { updateUserLocation } from '../lib/location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// ── Consent toggle component ──────────────────────────────────────────────────
+function ConsentToggle({
+  value, onToggle, required, title, subtitle,
+}: {
+  value: boolean; onToggle: () => void; required?: boolean;
+  title: string; subtitle: string;
+}) {
+  return (
+    <TouchableOpacity onPress={onToggle} activeOpacity={0.7} style={styles.consentRow}>
+      <View style={[styles.checkbox, value ? styles.checkboxOn : styles.checkboxOff]}>
+        {value && <Text style={styles.checkmark}>✓</Text>}
+      </View>
+      <View style={{ flex: 1 }}>
+        <View style={styles.consentTitleRow}>
+          <Text style={styles.consentTitle}>{title}</Text>
+          {required
+            ? <View style={styles.requiredBadge}><Text style={styles.requiredText}>Required</Text></View>
+            : <View style={styles.optionalBadge}><Text style={styles.optionalText}>Optional</Text></View>
+          }
+        </View>
+        <Text style={styles.consentSub}>{subtitle}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// ── Screen ─────────────────────────────────────────────────────────────────────
 export default function RegistrationScreen() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [name, setName]                       = useState('');
+  const [email, setEmail]                     = useState('');
+  const [password, setPassword]               = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword]       = useState(false);
+  const [showConfirm, setShowConfirm]         = useState(false);
+  const [loading, setLoading]                 = useState(false);
+  const [focusedField, setFocusedField]       = useState<string | null>(null);
 
   // DPDP Act 2023 — Section 6 Granular Consents
-  const [consentAccount, setConsentAccount] = useState(false);   // MANDATORY
+  const [consentAccount, setConsentAccount]   = useState(false); // MANDATORY
   const [consentLocation, setConsentLocation] = useState(false); // Optional
-  const [consentComms, setConsentComms] = useState(false);       // Optional
+  const [consentComms, setConsentComms]       = useState(false); // Optional
 
   // DPDP Act 2023 — Section 9 Age Declaration
-  const [ageConfirmed, setAgeConfirmed] = useState(false);       // MANDATORY
+  const [ageConfirmed, setAgeConfirmed]       = useState(false); // MANDATORY
 
-  const emailRef = useRef<TextInput>(null);
+  const emailRef    = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
-  const confirmRef = useRef<TextInput>(null);
-  const router = useRouter();
+  const confirmRef  = useRef<TextInput>(null);
+  const router      = useRouter();
+  const insets      = useSafeAreaInsets();
 
-  const fadeIn = useRef(new Animated.Value(0)).current;
-  const slideUp = useRef(new Animated.Value(30)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeIn, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.timing(slideUp, { toValue: 0, duration: 600, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
-  const getPasswordStrength = () => {
+  // ── Password strength ────────────────────────────────────────────────────
+  const getStrength = () => {
     if (!password) return null;
-    if (password.length < 6) return { label: 'Too short', color: '#ef4444', widthPct: 25 };
-    if (password.length < 8) return { label: 'Weak', color: '#f59e0b', widthPct: 50 };
-    if (!/[A-Z]/.test(password) || !/[0-9]/.test(password)) return { label: 'Fair', color: '#eab308', widthPct: 70 };
-    return { label: 'Strong', color: '#22c55e', widthPct: 100 };
+    if (password.length < 6)  return { label: 'Too short', color: '#ef4444', pct: 20 };
+    if (password.length < 8)  return { label: 'Weak',      color: '#f59e0b', pct: 45 };
+    if (!/[A-Z]/.test(password) || !/[0-9]/.test(password))
+                               return { label: 'Fair',      color: '#eab308', pct: 70 };
+    return                          { label: 'Strong',     color: '#22c55e', pct: 100 };
   };
-
-  const strength = getPasswordStrength();
+  const strength  = getStrength();
   const canSubmit = consentAccount && ageConfirmed && !loading;
 
+  // ── Submit ───────────────────────────────────────────────────────────────
   const handleRegister = async () => {
-    if (!consentAccount) {
-      Alert.alert('Consent Required', 'You must consent to account data processing to create an account. This is required to identify you and keep your items secure.');
-      return;
-    }
-    if (!ageConfirmed) {
-      Alert.alert('Age Confirmation Required', 'You must confirm that you are 18 years of age or older to use this app.');
-      return;
-    }
-    if (!name.trim()) { Alert.alert('Required', 'Please enter your name.'); return; }
-    if (!email.trim()) { Alert.alert('Required', 'Please enter your email address.'); return; }
+    if (!consentAccount) { Alert.alert('Consent Required', 'You must consent to account data processing to create an account.'); return; }
+    if (!ageConfirmed)   { Alert.alert('Age Confirmation Required', 'You must confirm you are 18 years or older.'); return; }
+    if (!name.trim())    { Alert.alert('Required', 'Please enter your name.'); return; }
+    if (!email.trim())   { Alert.alert('Required', 'Please enter your email address.'); return; }
     if (password.length < 6) { Alert.alert('Weak Password', 'Password must be at least 6 characters.'); return; }
-    if (password !== confirmPassword) { Alert.alert('Mismatch', 'Passwords do not match. Please try again.'); return; }
+    if (password !== confirmPassword) { Alert.alert('Mismatch', 'Passwords do not match.'); return; }
 
     const now = new Date().toISOString();
-
     setLoading(true);
+
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
         data: {
           full_name: name.trim(),
-          // Store consent timestamps in auth metadata as a backup
           consent_account_at: now,
           consent_location_at: consentLocation ? now : null,
           consent_comms_at: consentComms ? now : null,
@@ -88,7 +104,6 @@ export default function RegistrationScreen() {
     if (error) {
       Alert.alert('Registration Failed', error.message);
     } else if (data.user) {
-      // Upsert the user row with consent timestamps (DPDP audit trail)
       await supabase.from('users').upsert({
         id: data.user.id,
         email: email.trim(),
@@ -99,52 +114,29 @@ export default function RegistrationScreen() {
         age_declared_at: now,
       }, { onConflict: 'id' });
 
-      // Handle College Auto-Join
+      // College auto-join
       try {
         const collegeId = await AsyncStorage.getItem('selectedCollegeId');
         if (collegeId && collegeId !== 'other') {
           const collegeName = await AsyncStorage.getItem('selectedCollegeName') || 'College Community';
-          
-          // Find existing group for this college
           let { data: existingGroup } = await supabase.from('community_groups').select('id').eq('college_id', collegeId).single();
           let groupId = existingGroup?.id;
-          
-          // If not found, create it
           if (!groupId) {
-            const { data: newGroup } = await supabase.from('community_groups').insert({
-              name: collegeName,
-              is_official: true,
-              created_by: data.user.id,
-              college_id: collegeId
-            }).select('id').single();
+            const { data: newGroup } = await supabase.from('community_groups').insert({ name: collegeName, is_official: true, created_by: data.user.id, college_id: collegeId }).select('id').single();
             groupId = newGroup?.id;
           }
-
-          // Add user to the group
           if (groupId) {
-            await supabase.from('group_members').insert({
-              group_id: groupId,
-              user_id: data.user.id,
-              role: 'member',
-              status: 'active'
-            });
+            await supabase.from('group_members').insert({ group_id: groupId, user_id: data.user.id, role: 'member', status: 'active' });
             await supabase.rpc('increment_group_members', { g_id: groupId }).catch(() => {});
           }
         }
-      } catch (collegeErr) {
-        console.warn('Failed to auto-join college community', collegeErr);
-      }
+      } catch (collegeErr) { console.warn('Failed to auto-join college community', collegeErr); }
 
-      // Request location permission only if user consented
       if (consentLocation) {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status === 'granted' && data.session) {
-            await updateUserLocation(data.user.id);
-          }
-        } catch (err) {
-          console.log('Location ask failed', err);
-        }
+          if (status === 'granted' && data.session) await updateUserLocation(data.user.id);
+        } catch (err) { console.log('Location ask failed', err); }
       }
 
       if (!data.session) {
@@ -158,154 +150,166 @@ export default function RegistrationScreen() {
     setLoading(false);
   };
 
-  const ConsentToggle = ({
-    value, onToggle, required, title, subtitle,
-  }: {
-    value: boolean; onToggle: () => void; required?: boolean;
-    title: string; subtitle: string;
-  }) => (
-    <TouchableOpacity onPress={onToggle} activeOpacity={0.7} style={styles.consentRow}>
-      <View style={[
-        styles.checkbox,
-        { borderColor: value ? '#6366f1' : '#475569', backgroundColor: value ? '#6366f1' : 'transparent' }
-      ]}>
-        {value && <Text style={styles.checkmark}>✓</Text>}
-      </View>
-      <View style={styles.consentText}>
-        <View style={styles.consentTitleRow}>
-          <Text style={styles.consentTitle}>{title}</Text>
-          {required && <View style={styles.requiredBadge}><Text style={styles.requiredText}>Required</Text></View>}
-          {!required && <View style={styles.optionalBadge}><Text style={styles.optionalText}>Optional</Text></View>}
-        </View>
-        <Text style={styles.consentSub}>{subtitle}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#6366f1" />
+
       <KeyboardAwareScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
-        enableOnAndroid={true}
-        extraScrollHeight={100}
+        enableOnAndroid
+        extraScrollHeight={20}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Back Button */}
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-          <Text style={styles.backTxt}>← Back to Sign In</Text>
-        </TouchableOpacity>
+        {/* ── Gradient Header ── */}
+        <LinearGradient
+          colors={['#6366f1', '#7c3aed']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.header, { paddingTop: insets.top + 20 }]}
+        >
+          <View style={styles.circle1} />
+          <View style={styles.circle2} />
 
-        <Animated.View style={{ opacity: fadeIn, transform: [{ translateY: slideUp }] }}>
-          {/* Header */}
-          <View style={styles.headerBlock}>
-            <View style={styles.iconWrap}><Text style={styles.iconEmoji}>🛡️</Text></View>
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>
-              {'Join the Lost & Found Network.\nProtect your valuables — for free.'}
-            </Text>
+          {/* Back button inside gradient */}
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={styles.backBtn}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+
+          <View style={styles.logoWrap}>
+            <Text style={styles.logoEmoji}>🛡️</Text>
           </View>
+          <Text style={styles.headerTitle}>Create Account</Text>
+          <Text style={styles.headerSub}>
+            Join the Lost & Found Network.{'\n'}Protect your valuables — for free.
+          </Text>
+        </LinearGradient>
 
-          {/* Form Card */}
+        {/* ── White body ── */}
+        <View style={styles.body}>
+
+          {/* ── Form card ── */}
           <View style={styles.card}>
+            <Text style={styles.cardTitle}>Your Details</Text>
+
             {/* Name */}
-            <Text style={styles.label}>Full Name</Text>
-            <View style={styles.inputRow}>
-              <Text style={styles.inputIcon}>👤</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Alex Chen"
-                placeholderTextColor="#64748b"
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-                autoCorrect={false}
-                returnKeyType="next"
-                onSubmitEditing={() => emailRef.current?.focus()}
-                blurOnSubmit={false}
-              />
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Full Name</Text>
+              <View style={[styles.inputRow, focusedField === 'name' && styles.inputRowFocused]}>
+                <Text style={styles.inputIcon}>👤</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Alex Chen"
+                  placeholderTextColor="#94a3b8"
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onFocus={() => setFocusedField('name')}
+                  onBlur={() => setFocusedField(null)}
+                  onSubmitEditing={() => emailRef.current?.focus()}
+                  blurOnSubmit={false}
+                />
+              </View>
             </View>
 
             {/* Email */}
-            <Text style={styles.label}>Email Address</Text>
-            <View style={styles.inputRow}>
-              <Text style={styles.inputIcon}>✉️</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="your@email.com"
-                placeholderTextColor="#64748b"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoCorrect={false}
-                ref={emailRef}
-                returnKeyType="next"
-                onSubmitEditing={() => passwordRef.current?.focus()}
-                blurOnSubmit={false}
-              />
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Email Address</Text>
+              <View style={[styles.inputRow, focusedField === 'email' && styles.inputRowFocused]}>
+                <Text style={styles.inputIcon}>✉️</Text>
+                <TextInput
+                  ref={emailRef}
+                  style={styles.input}
+                  placeholder="your@email.com"
+                  placeholderTextColor="#94a3b8"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  blurOnSubmit={false}
+                />
+              </View>
             </View>
 
             {/* Password */}
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputRow}>
-              <Text style={styles.inputIcon}>🔒</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="At least 6 characters"
-                placeholderTextColor="#64748b"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                ref={passwordRef}
-                returnKeyType="next"
-                onSubmitEditing={() => confirmRef.current?.focus()}
-                blurOnSubmit={false}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
-                <Text style={styles.showHide}>{showPassword ? 'Hide' : 'Show'}</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Password Strength */}
-            {strength && (
-              <View style={styles.strengthWrap}>
-                <View style={styles.strengthBar}>
-                  <View style={[styles.strengthFill, { width: `${strength.widthPct}%` as any, backgroundColor: strength.color }]} />
-                </View>
-                <Text style={[styles.strengthLabel, { color: strength.color }]}>{strength.label}</Text>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Password</Text>
+              <View style={[styles.inputRow, focusedField === 'password' && styles.inputRowFocused]}>
+                <Text style={styles.inputIcon}>🔒</Text>
+                <TextInput
+                  ref={passwordRef}
+                  style={styles.input}
+                  placeholder="At least 6 characters"
+                  placeholderTextColor="#94a3b8"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  onSubmitEditing={() => confirmRef.current?.focus()}
+                  blurOnSubmit={false}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
+                  <Text style={styles.showHide}>{showPassword ? 'Hide' : 'Show'}</Text>
+                </TouchableOpacity>
               </View>
-            )}
+              {/* Password strength bar */}
+              {strength && (
+                <View style={styles.strengthWrap}>
+                  <View style={styles.strengthTrack}>
+                    <View style={[styles.strengthFill, { width: `${strength.pct}%` as any, backgroundColor: strength.color }]} />
+                  </View>
+                  <Text style={[styles.strengthLabel, { color: strength.color }]}>{strength.label}</Text>
+                </View>
+              )}
+            </View>
 
             {/* Confirm Password */}
-            <Text style={styles.label}>Confirm Password</Text>
-            <View style={[styles.inputRow, confirmPassword && confirmPassword !== password ? styles.inputError : {}]}>
-              <Text style={styles.inputIcon}>🔑</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Re-enter password"
-                placeholderTextColor="#64748b"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showConfirm}
-                autoCapitalize="none"
-                autoCorrect={false}
-                ref={confirmRef}
-                returnKeyType="done"
-                onSubmitEditing={handleRegister}
-              />
-              <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)} activeOpacity={0.7}>
-                <Text style={styles.showHide}>{showConfirm ? 'Hide' : 'Show'}</Text>
-              </TouchableOpacity>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Confirm Password</Text>
+              <View style={[
+                styles.inputRow,
+                focusedField === 'confirm' && styles.inputRowFocused,
+                confirmPassword && confirmPassword !== password && styles.inputRowError,
+              ]}>
+                <Text style={styles.inputIcon}>🔑</Text>
+                <TextInput
+                  ref={confirmRef}
+                  style={styles.input}
+                  placeholder="Re-enter password"
+                  placeholderTextColor="#94a3b8"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showConfirm}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onFocus={() => setFocusedField('confirm')}
+                  onBlur={() => setFocusedField(null)}
+                  onSubmitEditing={handleRegister}
+                />
+                <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)} activeOpacity={0.7}>
+                  <Text style={styles.showHide}>{showConfirm ? 'Hide' : 'Show'}</Text>
+                </TouchableOpacity>
+              </View>
+              {confirmPassword && confirmPassword !== password && (
+                <Text style={styles.errorText}>⚠️  Passwords do not match</Text>
+              )}
             </View>
-            {confirmPassword && confirmPassword !== password && (
-              <Text style={styles.errorText}>Passwords do not match</Text>
-            )}
           </View>
 
-          {/* ─── DPDP Consent Section ─── */}
+          {/* ── DPDP Consent card ── */}
           <View style={styles.consentCard}>
             <View style={styles.consentHeader}>
               <Text style={styles.consentHeaderEmoji}>📋</Text>
@@ -316,212 +320,216 @@ export default function RegistrationScreen() {
             </View>
 
             <ConsentToggle
-              value={consentAccount}
-              onToggle={() => setConsentAccount(!consentAccount)}
-              required
+              value={consentAccount} onToggle={() => setConsentAccount(!consentAccount)} required
               title="Account & Identity Data"
               subtitle="Your name and email are used for authentication and account security. Without this, we cannot create your account."
             />
-
-            <View style={styles.divider} />
-
+            <View style={styles.dividerLine} />
             <ConsentToggle
-              value={consentLocation}
-              onToggle={() => setConsentLocation(!consentLocation)}
+              value={consentLocation} onToggle={() => setConsentLocation(!consentLocation)}
               title="Location Data"
-              subtitle="Your GPS coordinates are used to show you nearby lost items and send radius alerts to your community. You can change this later in Settings."
+              subtitle="Your GPS coordinates are used to show nearby lost items and send radius alerts to your community."
             />
-
-            <View style={styles.divider} />
-
+            <View style={styles.dividerLine} />
             <ConsentToggle
-              value={consentComms}
-              onToggle={() => setConsentComms(!consentComms)}
+              value={consentComms} onToggle={() => setConsentComms(!consentComms)}
               title="Notifications & Communications"
-              subtitle="Push notifications when your item is found, someone messages you, or a new lost report appears nearby. You can change this later in Settings."
+              subtitle="Push notifications when your item is found, someone messages you, or a lost report appears nearby."
             />
 
-            <TouchableOpacity onPress={() => router.push('/privacy-policy')} style={styles.policyLink} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => router.push('/privacy-policy')} activeOpacity={0.7} style={styles.policyLink}>
               <Text style={styles.policyLinkText}>Read our full Privacy Policy →</Text>
             </TouchableOpacity>
           </View>
 
-          {/* ─── Age Declaration ─── */}
+          {/* ── Age declaration card ── */}
           <View style={styles.ageCard}>
-            <TouchableOpacity onPress={() => setAgeConfirmed(!ageConfirmed)} activeOpacity={0.7} style={styles.consentRow}>
-              <View style={[
-                styles.checkbox,
-                { borderColor: ageConfirmed ? '#0891b2' : '#475569', backgroundColor: ageConfirmed ? '#0891b2' : 'transparent' }
-              ]}>
-                {ageConfirmed && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-              <View style={styles.consentText}>
-                <View style={styles.consentTitleRow}>
-                  <Text style={styles.consentTitle}>I am 18 years or older</Text>
-                  <View style={styles.requiredBadge}><Text style={styles.requiredText}>Required</Text></View>
-                </View>
-                <Text style={styles.consentSub}>
-                  {'This app is intended for adults only. By checking this box, you confirm you are 18 years of age or older. This is required under Section 9 of the DPDP Act 2023.'}
-                </Text>
-              </View>
-            </TouchableOpacity>
+            <ConsentToggle
+              value={ageConfirmed} onToggle={() => setAgeConfirmed(!ageConfirmed)} required
+              title="I am 18 years or older"
+              subtitle="This app is intended for adults only. Required under Section 9 of the DPDP Act 2023."
+            />
           </View>
 
-          {/* Create Button */}
-          <TouchableOpacity
-            style={[styles.createBtn, !canSubmit && styles.createBtnDisabled]}
-            onPress={handleRegister}
-            disabled={!canSubmit}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.createBtnText, !canSubmit && styles.createBtnTextDisabled]}>
-              {loading ? 'Creating Account...' : 'Create Free Account'}
-            </Text>
-          </TouchableOpacity>
-
+          {/* Hint messages */}
           {!consentAccount && (
-            <Text style={styles.gateHint}>⚠️ Account data consent is required to continue</Text>
+            <Text style={styles.gateHint}>⚠️  Account data consent is required to continue</Text>
           )}
           {consentAccount && !ageConfirmed && (
-            <Text style={styles.gateHint}>⚠️ Please confirm you are 18 or older</Text>
+            <Text style={styles.gateHint}>⚠️  Please confirm you are 18 or older</Text>
           )}
 
-          {/* What's Included */}
-          <View style={styles.card}>
-            <Text style={styles.includedTitle}>Free plan includes</Text>
+          {/* ── Create Account button ── */}
+          <TouchableOpacity
+            onPress={handleRegister}
+            disabled={!canSubmit}
+            activeOpacity={0.88}
+            style={{ borderRadius: 18, overflow: 'hidden', marginBottom: 12 }}
+          >
+            <LinearGradient
+              colors={canSubmit ? ['#6366f1', '#7c3aed'] : ['#e2e8f0', '#e2e8f0']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.createBtn}
+            >
+              {loading
+                ? <ActivityIndicator color={canSubmit ? '#ffffff' : '#94a3b8'} />
+                : <Text style={[styles.createBtnText, !canSubmit && styles.createBtnTextDisabled]}>
+                    Create Free Account
+                  </Text>
+              }
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* ── Free plan perks ── */}
+          <View style={styles.perksCard}>
+            <Text style={styles.perksTitle}>Free plan includes</Text>
             {[
-              { icon: '📦', title: 'Protect up to 2 items', sub: 'NFC tags supported' },
-              { icon: '📱', title: 'NFC Scanning', sub: 'Let finders contact you instantly' },
-              { icon: '🔔', title: 'Real-time alerts', sub: 'Know when your item is found' },
+              { icon: '📦', title: 'Protect up to 2 items',    sub: 'NFC tags supported' },
+              { icon: '📱', title: 'NFC Scanning',              sub: 'Let finders contact you instantly' },
+              { icon: '🔔', title: 'Real-time alerts',          sub: 'Know when your item is found' },
             ].map((f, i) => (
-              <View key={i} style={[styles.featureRow, i !== 2 && styles.featureRowBorder]}>
-                <View style={styles.featureIcon}><Text style={styles.featureEmoji}>{f.icon}</Text></View>
+              <View key={i} style={[styles.perkRow, i !== 2 && styles.perkRowBorder]}>
+                <View style={styles.perkIcon}><Text style={{ fontSize: 18 }}>{f.icon}</Text></View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.featureTitle}>{f.title}</Text>
-                  <Text style={styles.featureSub}>{f.sub}</Text>
+                  <Text style={styles.perkTitle}>{f.title}</Text>
+                  <Text style={styles.perkSub}>{f.sub}</Text>
                 </View>
-                <Text style={styles.featureCheck}>✓</Text>
+                <Text style={styles.perkCheck}>✓</Text>
               </View>
             ))}
           </View>
 
           {/* Sign In Link */}
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={styles.signinLink}>
-            <Text style={styles.signinText}>
-              {'Already have an account?  '}
-              <Text style={styles.signinHighlight}>Sign In</Text>
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={[styles.signInLink, { marginBottom: insets.bottom + 32 }]}>
+            <Text style={styles.signInText}>
+              Already have an account?{'  '}
+              <Text style={styles.signInHighlight}>Sign In</Text>
             </Text>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
       </KeyboardAwareScrollView>
     </View>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
-  backBtn: { marginBottom: 32, flexDirection: 'row', alignItems: 'center' },
-  backTxt: { color: '#6366f1', fontSize: 15, fontWeight: '600' },
-  headerBlock: { marginBottom: 28 },
-  iconWrap: {
-    width: 64, height: 64, backgroundColor: '#1e293b', borderWidth: 1,
-    borderColor: '#334155', borderRadius: 18, alignItems: 'center',
-    justifyContent: 'center', marginBottom: 20,
+  container: { flex: 1, backgroundColor: '#f8faff' },
+
+  /* Header */
+  header: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 52,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  iconEmoji: { fontSize: 28 },
-  title: { color: '#fff', fontSize: 32, fontWeight: '900', marginBottom: 8 },
-  subtitle: { color: '#94a3b8', fontSize: 15, lineHeight: 23 },
+  circle1: { position: 'absolute', top: -40, right: -40, width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(255,255,255,0.08)' },
+  circle2: { position: 'absolute', bottom: 10, left: -50, width: 140, height: 140, borderRadius: 70,  backgroundColor: 'rgba(255,255,255,0.06)' },
+  backBtn:  { alignSelf: 'flex-start', marginBottom: 20 },
+  backText: { color: 'rgba(255,255,255,0.9)', fontSize: 15, fontWeight: '700' },
+  logoWrap: {
+    width: 64, height: 64, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
+  },
+  logoEmoji:   { fontSize: 30 },
+  headerTitle: { color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: -0.5, marginBottom: 6 },
+  headerSub:   { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '500', textAlign: 'center', lineHeight: 21 },
+
+  /* Body */
+  body: {
+    flex: 1, backgroundColor: '#f8faff',
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    marginTop: -24, paddingHorizontal: 16, paddingTop: 22,
+  },
+
+  /* Form card */
   card: {
-    backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#334155',
-    borderRadius: 24, padding: 20, marginBottom: 16,
+    backgroundColor: '#ffffff', borderRadius: 22, padding: 20, marginBottom: 14,
+    shadowColor: '#6366f1', shadowOpacity: 0.08, shadowRadius: 20,
+    shadowOffset: { width: 0, height: 6 }, elevation: 4,
+    borderWidth: 1, borderColor: '#f1f5f9',
   },
-  label: {
-    color: '#94a3b8', fontSize: 11, textTransform: 'uppercase',
-    letterSpacing: 1, marginBottom: 8, fontWeight: '700',
-  },
-  inputRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f172a',
-    borderWidth: 1, borderColor: '#334155', borderRadius: 16, paddingHorizontal: 14, marginBottom: 16,
-  },
-  inputError: { borderColor: '#ef4444' },
-  inputIcon: { fontSize: 16, marginRight: 10, color: '#64748b' },
-  input: { flex: 1, color: '#fff', fontSize: 15, paddingVertical: 14 },
-  showHide: { color: '#64748b', fontSize: 13, fontWeight: '600' },
-  strengthWrap: { marginTop: -10, marginBottom: 16 },
-  strengthBar: { height: 6, backgroundColor: '#334155', borderRadius: 99, overflow: 'hidden', marginBottom: 4 },
-  strengthFill: { height: '100%', borderRadius: 99 },
-  strengthLabel: { fontSize: 11, fontWeight: '700' },
-  errorText: { color: '#ef4444', fontSize: 11, marginTop: -12, marginBottom: 12 },
+  cardTitle: { color: '#0f172a', fontWeight: '800', fontSize: 15, marginBottom: 16 },
 
-  // Consent Section
+  /* Fields */
+  fieldGroup:       { marginBottom: 14 },
+  label:            { color: '#64748b', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.9, marginBottom: 7 },
+  inputRow:         { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8faff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14 },
+  inputRowFocused:  { borderColor: '#6366f1', backgroundColor: '#eef2ff' },
+  inputRowError:    { borderColor: '#ef4444', backgroundColor: '#fff5f5' },
+  inputIcon:        { fontSize: 15, marginRight: 10 },
+  input:            { flex: 1, color: '#0f172a', fontSize: 15, fontWeight: '500', paddingVertical: 13 },
+  showHide:         { color: '#6366f1', fontWeight: '700', fontSize: 13, paddingLeft: 6 },
+  errorText:        { color: '#ef4444', fontSize: 11, fontWeight: '600', marginTop: 5 },
+
+  /* Strength bar */
+  strengthWrap:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
+  strengthTrack: { flex: 1, height: 5, backgroundColor: '#e2e8f0', borderRadius: 99, overflow: 'hidden' },
+  strengthFill:  { height: '100%', borderRadius: 99 },
+  strengthLabel: { fontSize: 11, fontWeight: '700', width: 56, textAlign: 'right' },
+
+  /* Consent card */
   consentCard: {
-    backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#6366f1',
-    borderRadius: 24, padding: 20, marginBottom: 16,
+    backgroundColor: '#ffffff', borderRadius: 22, padding: 18, marginBottom: 12,
+    borderWidth: 1.5, borderColor: '#e0e7ff',
+    shadowColor: '#6366f1', shadowOpacity: 0.07, shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 }, elevation: 3,
   },
-  consentHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  consentHeaderEmoji: { fontSize: 24, marginRight: 12 },
-  consentHeaderTitle: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  consentHeaderSub: { color: '#6366f1', fontSize: 11, fontWeight: '600', marginTop: 2 },
-  consentRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  checkbox: {
-    width: 22, height: 22, borderRadius: 6, borderWidth: 2, marginTop: 2, marginRight: 12,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  checkmark: { color: '#fff', fontWeight: '900', fontSize: 13 },
-  consentText: { flex: 1 },
-  consentTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
-  consentTitle: { color: '#e2e8f0', fontWeight: '700', fontSize: 14 },
-  requiredBadge: {
-    backgroundColor: '#7f1d1d', borderRadius: 99,
-    paddingHorizontal: 8, paddingVertical: 2,
-  },
-  requiredText: { color: '#fca5a5', fontSize: 10, fontWeight: '700' },
-  optionalBadge: {
-    backgroundColor: '#1e3a2f', borderRadius: 99,
-    paddingHorizontal: 8, paddingVertical: 2,
-  },
-  optionalText: { color: '#6ee7b7', fontSize: 10, fontWeight: '700' },
-  consentSub: { color: '#64748b', fontSize: 12, lineHeight: 18 },
-  divider: { height: 1, backgroundColor: '#334155', marginVertical: 16 },
-  policyLink: { marginTop: 16, alignItems: 'center' },
-  policyLinkText: { color: '#6366f1', fontSize: 13, fontWeight: '600' },
+  consentHeader:      { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
+  consentHeaderEmoji: { fontSize: 22, marginRight: 10 },
+  consentHeaderTitle: { color: '#0f172a', fontWeight: '800', fontSize: 14 },
+  consentHeaderSub:   { color: '#6366f1', fontSize: 11, fontWeight: '600', marginTop: 1 },
+  consentRow:         { flexDirection: 'row', alignItems: 'flex-start' },
+  checkbox:           { width: 22, height: 22, borderRadius: 7, borderWidth: 2, marginTop: 2, marginRight: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  checkboxOn:         { backgroundColor: '#6366f1', borderColor: '#6366f1' },
+  checkboxOff:        { backgroundColor: 'transparent', borderColor: '#cbd5e1' },
+  checkmark:          { color: '#fff', fontWeight: '900', fontSize: 13 },
+  consentTitleRow:    { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 3 },
+  consentTitle:       { color: '#0f172a', fontWeight: '700', fontSize: 13 },
+  requiredBadge:      { backgroundColor: '#fee2e2', borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 },
+  requiredText:       { color: '#dc2626', fontSize: 10, fontWeight: '700' },
+  optionalBadge:      { backgroundColor: '#dcfce7', borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 },
+  optionalText:       { color: '#16a34a', fontSize: 10, fontWeight: '700' },
+  consentSub:         { color: '#64748b', fontSize: 12, lineHeight: 17 },
+  dividerLine:        { height: 1, backgroundColor: '#f1f5f9', marginVertical: 14 },
+  policyLink:         { marginTop: 14, alignItems: 'center' },
+  policyLinkText:     { color: '#6366f1', fontSize: 13, fontWeight: '600' },
 
-  // Age Card
+  /* Age card */
   ageCard: {
-    backgroundColor: '#0c1a2e', borderWidth: 1, borderColor: '#0891b2',
-    borderRadius: 24, padding: 20, marginBottom: 20,
+    backgroundColor: '#f0f9ff', borderRadius: 22, padding: 18, marginBottom: 14,
+    borderWidth: 1.5, borderColor: '#bae6fd',
   },
 
-  // Create Button
-  createBtn: {
-    backgroundColor: '#6366f1', borderRadius: 18, paddingVertical: 16,
-    alignItems: 'center', marginBottom: 10,
-    shadowColor: '#6366f1', shadowOpacity: 0.4, shadowRadius: 12, elevation: 5,
-  },
-  createBtnDisabled: { backgroundColor: '#334155', shadowOpacity: 0, elevation: 0 },
-  createBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  createBtnTextDisabled: { color: '#64748b' },
-  gateHint: { color: '#f59e0b', fontSize: 12, textAlign: 'center', marginBottom: 16, fontWeight: '600' },
+  /* Hint */
+  gateHint: { color: '#f59e0b', fontSize: 12, fontWeight: '700', textAlign: 'center', marginBottom: 10 },
 
-  // Features
-  includedTitle: {
-    color: '#94a3b8', fontSize: 11, textTransform: 'uppercase',
-    letterSpacing: 1, fontWeight: '700', marginBottom: 16,
-  },
-  featureRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
-  featureRowBorder: { borderBottomWidth: 1, borderBottomColor: '#334155' },
-  featureIcon: {
-    width: 40, height: 40, backgroundColor: '#0f172a', borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center', marginRight: 14,
-  },
-  featureEmoji: { fontSize: 18 },
-  featureTitle: { color: '#e2e8f0', fontWeight: '600', fontSize: 14 },
-  featureSub: { color: '#64748b', fontSize: 12, marginTop: 2 },
-  featureCheck: { color: '#6366f1', fontWeight: '900', fontSize: 18 },
+  /* Create button */
+  createBtn:             { paddingVertical: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 18 },
+  createBtnText:         { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  createBtnTextDisabled: { color: '#94a3b8' },
 
-  // Sign-in link
-  signinLink: { paddingVertical: 8, alignItems: 'center' },
-  signinText: { color: '#64748b', fontSize: 15 },
-  signinHighlight: { color: '#6366f1', fontWeight: '700' },
+  /* Free perks card */
+  perksCard: {
+    backgroundColor: '#ffffff', borderRadius: 22, padding: 18, marginBottom: 16,
+    borderWidth: 1, borderColor: '#f1f5f9',
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 }, elevation: 2,
+  },
+  perksTitle:    { color: '#64748b', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 },
+  perkRow:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 11 },
+  perkRowBorder: { borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  perkIcon:      { width: 38, height: 38, backgroundColor: '#f8faff', borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginRight: 13 },
+  perkTitle:     { color: '#0f172a', fontWeight: '700', fontSize: 14 },
+  perkSub:       { color: '#64748b', fontSize: 12, marginTop: 1 },
+  perkCheck:     { color: '#6366f1', fontWeight: '900', fontSize: 18, marginLeft: 8 },
+
+  /* Sign in link */
+  signInLink:      { alignItems: 'center', paddingVertical: 6 },
+  signInText:      { color: '#64748b', fontSize: 15, fontWeight: '500' },
+  signInHighlight: { color: '#6366f1', fontWeight: '800' },
 });
