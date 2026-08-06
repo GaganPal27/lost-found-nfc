@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, FlatList,
-  StatusBar, ActivityIndicator, Alert, Linking, StyleSheet,
+  StatusBar, ActivityIndicator, Alert, Linking, StyleSheet, Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import * as Haptics from 'expo-haptics';
 
-type Message = { id: string; sender_name: string; sender_id: string | null; body: string; created_at: string; };
+type Message = { id: string; sender_name: string; sender_id: string | null; body: string; created_at: string; image_url?: string | null; };
 
 type Conversation = {
   id: string; item_id: string | null; owner_id: string; finder_name: string | null; finder_phone: string | null;
@@ -110,11 +110,21 @@ export default function ConversationScreen() {
         {!isMe && <Text style={styles.msgSender}>{item.sender_name}</Text>}
         {isMe ? (
           <LinearGradient colors={['#6366f1', '#7c3aed']} start={{x:0,y:0}} end={{x:1,y:1}} style={[styles.msgBubble, styles.bubbleMe]}>
-            <Text style={styles.msgTextMe}>{item.body}</Text>
+            {item.image_url ? <Image source={{ uri: item.image_url }} style={{ width: 200, height: 200, borderRadius: 12, marginBottom: item.body ? 8 : 0 }} resizeMode="cover" /> : null}
+            {item.body ? <Text style={styles.msgTextMe} selectable={true}>{item.body}</Text> : null}
           </LinearGradient>
         ) : (
           <View style={[styles.msgBubble, styles.bubbleOther]}>
-            <Text style={styles.msgTextOther}>{item.body}</Text>
+            {item.image_url ? <Image source={{ uri: item.image_url }} style={{ width: 200, height: 200, borderRadius: 12, marginBottom: item.body && item.body !== 'Sent a photo' ? 8 : 0 }} resizeMode="cover" /> : null}
+            {(!item.image_url || (item.body && item.body !== 'Sent a photo')) && <Text style={styles.msgTextOther} selectable={true}>{item.body}</Text>}
+            {item.body.includes('https://www.google.com/maps') && (
+              <TouchableOpacity onPress={() => {
+                const url = item.body.match(/https:\/\/www\.google\.com\/maps\?q=[-0-9.]+,[-0-9.]+/)?.[0];
+                if (url) Linking.openURL(url);
+              }} style={{ marginTop: 8, backgroundColor: '#eff6ff', padding: 8, borderRadius: 8 }}>
+                <Text style={{ color: '#2563eb', fontWeight: '700', fontSize: 13, textAlign: 'center' }}>🗺️ Open in Google Maps</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
         <Text style={styles.msgTime}>{formatTime(item.created_at)}</Text>
