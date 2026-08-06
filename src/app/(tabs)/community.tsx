@@ -192,9 +192,30 @@ export default function CommunityScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [communityName, setCommunityName] = useState<string | null>(null);
+  const [communityMemberCount, setCommunityMemberCount] = useState<number | null>(null);
 
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   useEffect(() => { if (tabParam === 'groups') setActiveTab('groups'); }, [tabParam]);
+
+  useEffect(() => {
+    if (!dbUserId) return;
+    (async () => {
+      const { data } = await supabase
+        .from('group_members')
+        .select('community_groups!inner(name, member_count, is_official)')
+        .eq('user_id', dbUserId)
+        .eq('community_groups.is_official', true)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+      const group = (data as any)?.community_groups;
+      if (group) {
+        setCommunityName(group.name);
+        setCommunityMemberCount(group.member_count ?? null);
+      }
+    })();
+  }, [dbUserId]);
 
   useEffect(() => {
     fetchAll(true);
@@ -256,7 +277,17 @@ export default function CommunityScreen() {
         <View style={styles.hCircle2} />
 
         <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>Community</Text>
+          <View style={{ flex: 1, paddingRight: 16 }}>
+            <Text style={styles.headerLabel}>YOUR COMMUNITY</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {communityName ?? 'Community'}
+            </Text>
+            {communityMemberCount != null && (
+              <Text style={styles.headerMemberCount}>
+                {communityMemberCount.toLocaleString()} member{communityMemberCount === 1 ? '' : 's'}
+              </Text>
+            )}
+          </View>
           <TouchableOpacity style={styles.bellBtn} onPress={() => router.push('/notifications' as any)} activeOpacity={0.8}>
             <Feather name="bell" size={20} color="#6366f1" />
           </TouchableOpacity>
@@ -350,18 +381,20 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   /* Header */
-  header: { paddingHorizontal: 20, paddingBottom: 24, overflow: 'hidden', position: 'relative' },
+  header: { paddingHorizontal: 20, paddingBottom: 16, overflow: 'hidden', position: 'relative' },
   hCircle1: { position: 'absolute', top: -30, right: -30, width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.08)' },
   hCircle2: { position: 'absolute', bottom: -20, left: -40, width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(255,255,255,0.06)' },
   
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  headerTitle: { color: '#ffffff', fontSize: 32, fontWeight: '900', letterSpacing: -0.5 },
-  bellBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  headerTitle: { color: '#ffffff', fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
+  headerLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 2 },
+  headerMemberCount: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '600', marginTop: 2 },
+  bellBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
 
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 4 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 10, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 4 },
   searchInput: { flex: 1, marginLeft: 10, fontSize: 15, color: '#0f172a', fontWeight: '500' },
 
-  tabRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 14, padding: 4 },
+  tabRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 4 },
   tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
   tabBtnActive: { backgroundColor: '#ffffff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   tabBtnText: { fontSize: 14, color: '#ffffff', fontWeight: '700' },
