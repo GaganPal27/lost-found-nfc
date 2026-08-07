@@ -314,6 +314,14 @@ function RootLayout() {
     '/create-community-post',
     '/create-group',
     '/community-claim',
+    // Every other screen with its own bottom-pinned button/input bar —
+    // the global tab bar doesn't know about these and overlaps them.
+    '/conversation',      // chat message input bar
+    '/finder-connect',    // "Send to Owner" / success screen buttons
+    '/register-item',     // multi-step wizard's Next/Register button
+    '/edit-item',         // Save Changes button
+    '/notification/',     // "Go to Chat" action button (trailing slash intentional:
+                          // must NOT match /notifications or /notifications-list)
   ];
   const shouldHideTabBar = hideTabBarPrefixes.some((prefix) => pathname?.startsWith(prefix));
 
