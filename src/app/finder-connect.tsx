@@ -101,6 +101,16 @@ export default function FinderConnectScreen() {
       });
       if (msgError) Sentry.captureMessage(`finder-connect msg failed: ${msgError.message}`, 'warning');
 
+      // Send location as a clickable Google Maps link in chat
+      if (coords) {
+        await supabase.from('messages').insert({
+          conversation_id: conv.id,
+          sender_id: null,
+          sender_name: 'System',
+          body: `📍 Location shared:\nhttps://www.google.com/maps?q=${coords.lat.toFixed(6)},${coords.lng.toFixed(6)}`,
+        });
+      }
+
       const { error: notifError } = await supabase.rpc('create_item_notification', {
         p_owner_id: ownerAuthId, p_type: 'nfc_tap',
         p_message: `${finderName.trim()} found your "${item_name}"${locationLabel ? ` near ${locationLabel}` : ''}`,
