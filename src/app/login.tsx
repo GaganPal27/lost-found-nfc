@@ -169,6 +169,19 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
 
+          {/* Change university */}
+          <TouchableOpacity
+            onPress={() => router.replace('/select-college')}
+            activeOpacity={0.7}
+            style={{ alignItems: 'center', paddingVertical: 12 }}
+          >
+            <Text style={{ color: '#94a3b8', fontSize: 13, fontWeight: '500' }}>
+              Wrong university?{'  '}
+              <Text style={{ color: '#6366f1', fontWeight: '700' }}>Change it →</Text>
+            </Text>
+          </TouchableOpacity>
+
+
           <Text style={[styles.termsText, { paddingBottom: insets.bottom + 24 }]}>
             By signing in, you agree to our{' '}
             <Text style={styles.termsLink}>Terms & Privacy Policy</Text>

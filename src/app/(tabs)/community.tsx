@@ -194,6 +194,7 @@ export default function CommunityScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [communityName, setCommunityName] = useState<string | null>(null);
   const [communityMemberCount, setCommunityMemberCount] = useState<number | null>(null);
+  const [userCollegeId, setUserCollegeId] = useState<string | null>(null);
 
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   useEffect(() => { if (tabParam === 'groups') setActiveTab('groups'); }, [tabParam]);
@@ -203,7 +204,7 @@ export default function CommunityScreen() {
     (async () => {
       const { data } = await supabase
         .from('group_members')
-        .select('community_groups!inner(name, member_count, is_official)')
+        .select('community_groups!inner(id, name, member_count, is_official, college_id)')
         .eq('user_id', dbUserId)
         .eq('community_groups.is_official', true)
         .eq('status', 'active')
@@ -213,6 +214,7 @@ export default function CommunityScreen() {
       if (group) {
         setCommunityName(group.name);
         setCommunityMemberCount(group.member_count ?? null);
+        setUserCollegeId(group.college_id ?? null);
       }
     })();
   }, [dbUserId]);
@@ -223,7 +225,7 @@ export default function CommunityScreen() {
     const s2 = supabase.channel('feed_lost_v2').on('postgres_changes', { event: '*', schema: 'public', table: 'lost_item_posts' }, () => fetchAll(false)).subscribe();
     const s3 = supabase.channel('feed_groups_v2').on('postgres_changes', { event: '*', schema: 'public', table: 'community_groups' }, () => fetchAll(false)).subscribe();
     return () => { try { supabase.removeChannel(s1); supabase.removeChannel(s2); supabase.removeChannel(s3); } catch {} };
-  }, []);
+  }, [userCollegeId]);
 
   useEffect(() => {
     if (!searchQuery.trim()) { setFilteredFeed(feed); }
@@ -236,9 +238,22 @@ export default function CommunityScreen() {
   const fetchAll = useCallback(async (showLoader = false) => {
     if (showLoader) setLoading(true);
     try {
+      // Build feed queries — filter by user's college if known, else show nothing community-specific
+      let foundQuery = supabase.from('community_items').select('*, users(full_name)').neq('status', 'closed').order('created_at', { ascending: false }).limit(60);
+      let lostQuery  = supabase.from('lost_item_posts').select('*, users(full_name)').neq('status', 'closed').order('created_at', { ascending: false }).limit(60);
+
+      if (userCollegeId) {
+        foundQuery = foundQuery.eq('college_id', userCollegeId);
+        lostQuery  = lostQuery.eq('college_id', userCollegeId);
+      } else {
+        // No verified college — show empty feed rather than global feed
+        foundQuery = foundQuery.eq('college_id', '00000000-0000-0000-0000-000000000000');
+        lostQuery  = lostQuery.eq('college_id', '00000000-0000-0000-0000-000000000000');
+      }
+
       const [foundRes, lostRes, groupsRes] = await Promise.all([
-        supabase.from('community_items').select('*, users(full_name)').neq('status', 'closed').order('created_at', { ascending: false }).limit(60),
-        supabase.from('lost_item_posts').select('*, users(full_name)').neq('status', 'closed').order('created_at', { ascending: false }).limit(60),
+        foundQuery,
+        lostQuery,
         supabase.from('community_groups').select('*').eq('is_official', false).order('created_at', { ascending: false }).limit(50),
       ]);
 
@@ -247,7 +262,7 @@ export default function CommunityScreen() {
       setFeed([...foundPosts, ...lostPosts].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
       setGroups((groupsRes.data ?? []).filter((g:any) => g?.id).map((g:any) => ({ ...g, id: String(g.id), type: g.type === 'private' ? 'private' : 'public', member_count: g.member_count ?? 0 })));
     } catch (e) {} finally { setLoading(false); }
-  }, []);
+  }, [userCollegeId]);
 
   const handleRefresh = async () => { setRefreshing(true); await fetchAll(false); setRefreshing(false); };
   

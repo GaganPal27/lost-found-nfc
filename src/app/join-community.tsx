@@ -55,7 +55,7 @@ export default function JoinCommunityScreen() {
 
       const { error } = await supabase
         .from('group_members')
-        .insert({ group_id: group.id, user_id: profile.id, role: 'member', status: 'active' });
+        .insert({ group_id: group.id, user_id: profile.id, role: 'member', status: 'active', verified: false });
 
       if (error && error.code !== '23505') throw error; // 23505 = already a member
 

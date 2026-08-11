@@ -63,6 +63,22 @@ export default function RegistrationScreen() {
   const router      = useRouter();
   const insets      = useSafeAreaInsets();
 
+  // Email domain validation (UX warning only — server enforces via trigger)
+  const [emailDomainWarning, setEmailDomainWarning] = useState<string | null>(null);
+
+  const checkEmailDomain = async (emailValue: string) => {
+    const collegeId = await AsyncStorage.getItem('selectedCollegeId');
+    if (!collegeId || collegeId === 'other') { setEmailDomainWarning(null); return; }
+    const { data: college } = await supabase.from('colleges').select('domain, name').eq('id', collegeId).single();
+    if (!college?.domain) { setEmailDomainWarning(null); return; }
+    const enteredDomain = emailValue.trim().split('@')[1]?.toLowerCase();
+    if (enteredDomain && enteredDomain !== college.domain.toLowerCase()) {
+      setEmailDomainWarning(`${college.name} requires a @${college.domain} email. You can still register, but you won't be able to post in the ${college.name} community.`);
+    } else {
+      setEmailDomainWarning(null);
+    }
+  };
+
   // ── Password strength ────────────────────────────────────────────────────
   const getStrength = () => {
     if (!password) return null;
@@ -126,7 +142,7 @@ export default function RegistrationScreen() {
             groupId = newGroup?.id;
           }
           if (groupId) {
-            await supabase.from('group_members').insert({ group_id: groupId, user_id: data.user.id, role: 'member', status: 'active' });
+            await supabase.from('group_members').insert({ group_id: groupId, user_id: data.user.id, role: 'member', status: 'active', verified: true });
             await supabase.rpc('increment_group_members', { g_id: groupId }).catch(() => {});
           }
         }
@@ -232,12 +248,19 @@ export default function RegistrationScreen() {
                   autoCorrect={false}
                   returnKeyType="next"
                   onFocus={() => setFocusedField('email')}
-                  onBlur={() => setFocusedField(null)}
+                  onBlur={() => { setFocusedField(null); checkEmailDomain(email); }}
                   onSubmitEditing={() => passwordRef.current?.focus()}
                   blurOnSubmit={false}
                 />
               </View>
+              {emailDomainWarning && (
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 12, padding: 10, marginTop: 8 }}>
+                  <Text style={{ fontSize: 14, marginRight: 6 }}>⚠️</Text>
+                  <Text style={{ color: '#92400e', fontSize: 12, fontWeight: '600', flex: 1, lineHeight: 18 }}>{emailDomainWarning}</Text>
+                </View>
+              )}
             </View>
+
 
             {/* Password */}
             <View style={styles.fieldGroup}>
