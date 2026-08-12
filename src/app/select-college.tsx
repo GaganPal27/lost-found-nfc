@@ -1,14 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   ActivityIndicator, StyleSheet, SafeAreaView, Platform,
-  KeyboardAvoidingView, Modal, Alert, Animated,
+  KeyboardAvoidingView, Modal, Alert, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type College = {
@@ -21,25 +20,40 @@ type College = {
 export default function SelectCollegeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const inputRef = useRef<TextInput>(null);
 
   const [colleges, setColleges] = useState<College[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [selectedCollege, setSelectedCollege] = useState<College | null>(null);
-  const [showPickerModal, setShowPickerModal] = useState(false);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestName, setRequestName] = useState('');
   const [requestEmail, setRequestEmail] = useState('');
   const [submittingRequest, setSubmittingRequest] = useState(false);
 
-  useEffect(() => {
-    fetchColleges();
-  }, []);
+  // Only show results after 3 characters — like Camu
+  const filteredColleges = query.trim().length >= 3
+    ? colleges.filter(c =>
+        c.name.toLowerCase().includes(query.toLowerCase()) ||
+        (c.domain && c.domain.toLowerCase().includes(query.toLowerCase()))
+      )
+    : [];
+
+  const shouldShowDropdown = showDropdown && query.trim().length >= 3;
+
+  const handleQueryChange = (text: string) => {
+    setQuery(text);
+    setShowDropdown(true);
+    if (text.trim().length >= 3 && colleges.length === 0) {
+      fetchColleges();
+    }
+  };
 
   const fetchColleges = async () => {
+    if (loading) return;
+    setLoading(true);
     try {
-      const { data, error } = await supabase.from('colleges').select('*').order('name');
-      if (error) throw error;
+      const { data } = await supabase.from('colleges').select('*').order('name');
       setColleges(data || []);
     } catch (err) {
       console.error('Failed to fetch colleges', err);
@@ -48,31 +62,14 @@ export default function SelectCollegeScreen() {
     }
   };
 
-  const filteredColleges = colleges.filter(c =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (c.domain && c.domain.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  const handlePickCollege = (college: College) => {
-    setSelectedCollege(college);
-    setShowPickerModal(false);
-    setSearchQuery('');
-  };
-
-  const handlePickOther = () => {
-    setShowPickerModal(false);
-    setSearchQuery('');
-    setShowRequestModal(true);
-  };
-
-  const handleContinue = async () => {
-    if (!selectedCollege) {
-      Alert.alert('Select a University', 'Please select your university to continue.');
-      return;
-    }
+  const handleSelectCollege = async (college: College) => {
+    setQuery(college.name);
+    setShowDropdown(false);
+    inputRef.current?.blur();
     try {
-      await AsyncStorage.setItem('selectedCollegeId', selectedCollege.id);
-      await AsyncStorage.setItem('selectedCollegeName', selectedCollege.name);
+      await AsyncStorage.setItem('selectedCollegeId', college.id);
+      await AsyncStorage.setItem('selectedCollegeName', college.name);
+      await AsyncStorage.setItem('selectedCollegeDomain', college.domain ?? '');
       const hasSeen = await AsyncStorage.getItem('hasSeenOnboarding');
       if (hasSeen === 'true') {
         router.replace('/login');
@@ -86,24 +83,24 @@ export default function SelectCollegeScreen() {
 
   const handleSubmitRequest = async () => {
     if (!requestName.trim()) {
-      Alert.alert('Required', 'Please enter your college name.');
+      Alert.alert('Required', 'Please enter your institution name.');
       return;
     }
     setSubmittingRequest(true);
     try {
-      const { error } = await supabase.from('college_requests').insert({
+      await supabase.from('college_requests').insert({
         college_name: requestName.trim(),
         email: requestEmail.trim() || null,
       });
-      if (error) throw error;
 
       await AsyncStorage.setItem('selectedCollegeId', 'other');
       await AsyncStorage.setItem('selectedCollegeName', requestName.trim());
+      await AsyncStorage.setItem('selectedCollegeDomain', '');
 
       setShowRequestModal(false);
       Alert.alert(
-        'Request Sent! 🎉',
-        "We'll add your college shortly. You can still use the app in the meantime.",
+        "Request Sent! 🎉",
+        "We'll add your institution shortly. You can still use the app in the meantime.",
         [{
           text: 'Continue',
           onPress: async () => {
@@ -120,181 +117,158 @@ export default function SelectCollegeScreen() {
     }
   };
 
-  const renderCollegeRow = ({ item }: { item: College }) => (
-    <TouchableOpacity style={styles.collegeRow} onPress={() => handlePickCollege(item)} activeOpacity={0.7}>
-      <View style={styles.collegeRowIcon}>
-        <Ionicons name="school" size={22} color="#6366f1" />
-      </View>
-      <View style={styles.collegeRowInfo}>
-        <Text style={styles.collegeRowName} numberOfLines={1}>{item.name}</Text>
-        {item.domain && <Text style={styles.collegeRowDomain}>{item.domain}</Text>}
-      </View>
-      <Feather name="chevron-right" size={18} color="#cbd5e1" />
-    </TouchableOpacity>
-  );
-
   return (
-    <SafeAreaView style={styles.container}>
-      {/* ── Gradient Header ── */}
-      <LinearGradient
-        colors={['#6366f1', '#8b5cf6']}
-        style={[styles.header, { paddingTop: Math.max(insets.top, 20) + 16 }]}
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.hCircle1} />
-        <View style={styles.hCircle2} />
-        <View style={styles.logoOrb}>
-          <Text style={{ fontSize: 32 }}>🏫</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Select your institution</Text>
+          <View style={styles.divider} />
         </View>
-        <Text style={styles.headerTitle}>Find Your Campus</Text>
-        <Text style={styles.headerSub}>
-          Join your college community to connect{'\n'}with peers for lost & found.
-        </Text>
-      </LinearGradient>
 
-      {/* ── Body ── */}
-      <View style={styles.body}>
+        {/* Search field */}
+        <View style={styles.body}>
+          <Text style={styles.fieldLabel}>Institution</Text>
 
-        {/* University picker button */}
-        <Text style={styles.sectionLabel}>YOUR UNIVERSITY</Text>
-        <TouchableOpacity style={styles.pickerBtn} onPress={() => setShowPickerModal(true)} activeOpacity={0.8}>
-          <View style={styles.pickerBtnIcon}>
-            <Ionicons name="school-outline" size={22} color={selectedCollege ? '#6366f1' : '#94a3b8'} />
-          </View>
-          <Text style={[styles.pickerBtnText, selectedCollege && styles.pickerBtnTextSelected]} numberOfLines={1}>
-            {selectedCollege ? selectedCollege.name : 'Select your university...'}
-          </Text>
-          <Feather name="chevron-down" size={20} color={selectedCollege ? '#6366f1' : '#94a3b8'} />
-        </TouchableOpacity>
-
-        {selectedCollege?.domain && (
-          <View style={styles.domainBadge}>
-            <Feather name="check-circle" size={14} color="#16a34a" style={{ marginRight: 6 }} />
-            <Text style={styles.domainBadgeText}>Email domain: @{selectedCollege.domain}</Text>
-          </View>
-        )}
-
-        <TouchableOpacity
-          style={[styles.continueBtn, !selectedCollege && styles.continueBtnDisabled]}
-          onPress={handleContinue}
-          activeOpacity={0.88}
-          disabled={!selectedCollege}
-        >
-          <LinearGradient
-            colors={selectedCollege ? ['#6366f1', '#7c3aed'] : ['#e2e8f0', '#e2e8f0']}
-            style={styles.continueBtnGradient}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-          >
-            <Text style={[styles.continueBtnText, !selectedCollege && { color: '#94a3b8' }]}>
-              Continue  →
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.otherLink} onPress={() => setShowRequestModal(true)} activeOpacity={0.7}>
-          <Text style={styles.otherLinkText}>
-            My university isn't listed{'  '}
-            <Text style={{ color: '#6366f1', fontWeight: '700' }}>Request it →</Text>
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ── University Picker Modal ── */}
-      <Modal visible={showPickerModal} animationType="slide" transparent onRequestClose={() => setShowPickerModal(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
-          <View style={[styles.pickerSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            {/* Sheet handle */}
-            <View style={styles.sheetHandle} />
-
-            {/* Sheet header */}
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Select University</Text>
-              <TouchableOpacity onPress={() => { setShowPickerModal(false); setSearchQuery(''); }}>
-                <Feather name="x" size={22} color="#64748b" />
+          <View style={[styles.inputWrap, showDropdown && query.length >= 3 && styles.inputWrapActive]}>
+            <TextInput
+              ref={inputRef}
+              style={styles.input}
+              placeholder="Type your institution name"
+              placeholderTextColor="#94a3b8"
+              value={query}
+              onChangeText={handleQueryChange}
+              onFocus={() => setShowDropdown(true)}
+              autoCapitalize="words"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {query.length > 0 && (
+              <TouchableOpacity
+                onPress={() => { setQuery(''); setShowDropdown(false); }}
+                style={styles.clearBtn}
+                activeOpacity={0.7}
+              >
+                <Feather name="x" size={18} color="#94a3b8" />
               </TouchableOpacity>
-            </View>
-
-            {/* Search bar */}
-            <View style={styles.sheetSearch}>
-              <Feather name="search" size={18} color="#94a3b8" style={{ marginRight: 10 }} />
-              <TextInput
-                style={styles.sheetSearchInput}
-                placeholder="Search university name or domain..."
-                placeholderTextColor="#94a3b8"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoFocus={true}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Feather name="x-circle" size={18} color="#94a3b8" />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* College list */}
-            {loading ? (
-              <ActivityIndicator size="large" color="#6366f1" style={{ marginTop: 40 }} />
-            ) : (
-              <FlatList
-                data={filteredColleges}
-                keyExtractor={item => item.id}
-                renderItem={renderCollegeRow}
-                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 16 }}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                ListEmptyComponent={
-                  <View style={{ alignItems: 'center', paddingTop: 40 }}>
-                    <Text style={{ fontSize: 40, marginBottom: 12 }}>🔍</Text>
-                    <Text style={{ color: '#64748b', fontWeight: '600', textAlign: 'center' }}>
-                      No universities found.{'\n'}Try a different name or request yours below.
-                    </Text>
-                  </View>
-                }
-                ListFooterComponent={() => (
-                  <TouchableOpacity style={styles.otherRow} onPress={handlePickOther} activeOpacity={0.7}>
-                    <View style={[styles.collegeRowIcon, { backgroundColor: '#f1f5f9' }]}>
-                      <Feather name="plus-circle" size={22} color="#64748b" />
-                    </View>
-                    <View style={styles.collegeRowInfo}>
-                      <Text style={[styles.collegeRowName, { color: '#475569' }]}>My university isn't listed</Text>
-                      <Text style={styles.collegeRowDomain}>Request it — we'll set it up</Text>
-                    </View>
-                    <Feather name="chevron-right" size={18} color="#cbd5e1" />
-                  </TouchableOpacity>
-                )}
-              />
             )}
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
 
-      {/* ── Request College Modal ── */}
-      <Modal visible={showRequestModal} animationType="slide" transparent onRequestClose={() => setShowRequestModal(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
-          <View style={[styles.pickerSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          {/* Hint text — shown when less than 3 chars */}
+          {!shouldShowDropdown && (
+            <View style={styles.hintBox}>
+              <Text style={styles.hintText}>
+                Please type your institution name to search. You can type the first 3 letters of your institution to see the list.
+              </Text>
+            </View>
+          )}
+
+          {/* Inline dropdown results */}
+          {shouldShowDropdown && (
+            <View style={styles.dropdown}>
+              {loading ? (
+                <ActivityIndicator size="small" color="#6366f1" style={{ padding: 20 }} />
+              ) : filteredColleges.length === 0 ? (
+                <View style={styles.noResults}>
+                  <Text style={styles.noResultsText}>No institutions found for "{query}"</Text>
+                  <TouchableOpacity
+                    onPress={() => { setShowDropdown(false); setShowRequestModal(true); }}
+                    activeOpacity={0.7}
+                    style={styles.requestInline}
+                  >
+                    <Text style={styles.requestInlineText}>
+                      Request to add your institution →
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <ScrollView
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                  style={{ maxHeight: 340 }}
+                >
+                  {filteredColleges.map((college) => (
+                    <TouchableOpacity
+                      key={college.id}
+                      style={styles.dropdownRow}
+                      onPress={() => handleSelectCollege(college)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.dropdownRowIcon}>
+                        <Text style={{ fontSize: 18 }}>🏫</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.dropdownRowName} numberOfLines={1}>{college.name}</Text>
+                        {college.domain && (
+                          <Text style={styles.dropdownRowDomain}>@{college.domain}</Text>
+                        )}
+                      </View>
+                      <Feather name="chevron-right" size={16} color="#cbd5e1" />
+                    </TouchableOpacity>
+                  ))}
+
+                  {/* "Not listed" row at bottom of results */}
+                  <TouchableOpacity
+                    style={[styles.dropdownRow, styles.dropdownRowOther]}
+                    onPress={() => { setShowDropdown(false); setShowRequestModal(true); }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.dropdownRowIcon, { backgroundColor: '#f1f5f9' }]}>
+                      <Feather name="plus-circle" size={18} color="#64748b" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.dropdownRowName, { color: '#475569' }]}>
+                        My institution isn't listed
+                      </Text>
+                      <Text style={styles.dropdownRowDomain}>Request to add it</Text>
+                    </View>
+                    <Feather name="chevron-right" size={16} color="#cbd5e1" />
+                  </TouchableOpacity>
+                </ScrollView>
+              )}
+            </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+
+      {/* Request Modal */}
+      <Modal
+        visible={showRequestModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowRequestModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlay}
+        >
+          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Request Your College</Text>
-              <TouchableOpacity onPress={() => setShowRequestModal(false)}>
+              <Text style={styles.sheetTitle}>Request Your Institution</Text>
+              <TouchableOpacity onPress={() => setShowRequestModal(false)} activeOpacity={0.7}>
                 <Feather name="x" size={22} color="#64748b" />
               </TouchableOpacity>
             </View>
+
             <View style={{ paddingHorizontal: 20 }}>
-              <Text style={{ color: '#64748b', fontSize: 14, lineHeight: 20, marginBottom: 20 }}>
-                We'll set up an official community for your college. Let us know its name.
+              <Text style={styles.sheetSub}>
+                We'll set up an official community for your institution. Let us know its name and we'll add it shortly.
               </Text>
 
               <TextInput
-                style={styles.requestInput}
-                placeholder="College / University Name *"
+                style={styles.modalInput}
+                placeholder="Institution / University Name *"
                 placeholderTextColor="#94a3b8"
                 value={requestName}
                 onChangeText={setRequestName}
+                autoCapitalize="words"
               />
               <TextInput
-                style={styles.requestInput}
+                style={styles.modalInput}
                 placeholder="Your Email (Optional — we'll notify you)"
                 placeholderTextColor="#94a3b8"
                 keyboardType="email-address"
@@ -304,17 +278,15 @@ export default function SelectCollegeScreen() {
               />
 
               <TouchableOpacity
-                style={[styles.continueBtn, submittingRequest && { opacity: 0.7 }]}
+                style={[styles.submitBtn, submittingRequest && { opacity: 0.6 }]}
                 onPress={handleSubmitRequest}
                 disabled={submittingRequest}
                 activeOpacity={0.88}
               >
-                <LinearGradient colors={['#6366f1', '#7c3aed']} style={styles.continueBtnGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                  {submittingRequest
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={styles.continueBtnText}>Submit Request</Text>
-                  }
-                </LinearGradient>
+                {submittingRequest
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.submitBtnText}>Submit Request</Text>
+                }
               </TouchableOpacity>
             </View>
           </View>
@@ -325,61 +297,85 @@ export default function SelectCollegeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8faff' },
+  container: { flex: 1, backgroundColor: '#ffffff' },
 
   /* Header */
-  header: { paddingHorizontal: 24, paddingBottom: 40, overflow: 'hidden', position: 'relative', alignItems: 'center' },
-  hCircle1: { position: 'absolute', top: -30, right: -30, width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(255,255,255,0.08)' },
-  hCircle2: { position: 'absolute', bottom: -20, left: -40, width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(255,255,255,0.06)' },
-  logoOrb: { width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  headerTitle: { color: '#fff', fontSize: 26, fontWeight: '900', letterSpacing: -0.5, marginBottom: 8, textAlign: 'center' },
-  headerSub: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '500', textAlign: 'center', lineHeight: 20 },
+  header: { paddingHorizontal: 24, paddingTop: 32, paddingBottom: 0 },
+  title: { fontSize: 24, fontWeight: '800', color: '#0f172a', marginBottom: 20 },
+  divider: { height: 1, backgroundColor: '#e2e8f0' },
 
   /* Body */
-  body: { flex: 1, paddingHorizontal: 24, paddingTop: 32 },
-  sectionLabel: { color: '#94a3b8', fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 10 },
+  body: { paddingHorizontal: 24, paddingTop: 24, flex: 1 },
+  fieldLabel: { fontSize: 13, color: '#64748b', fontWeight: '600', marginBottom: 8 },
 
-  /* Picker button */
-  pickerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 16, shadowColor: '#6366f1', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  pickerBtnIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#eef2ff', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  pickerBtnText: { flex: 1, fontSize: 15, fontWeight: '500', color: '#94a3b8' },
-  pickerBtnTextSelected: { color: '#0f172a', fontWeight: '700' },
+  /* Search input */
+  inputWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 12,
+    backgroundColor: '#ffffff', paddingHorizontal: 14,
+  },
+  inputWrapActive: { borderColor: '#6366f1', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  input: { flex: 1, fontSize: 15, color: '#0f172a', paddingVertical: 14, fontWeight: '500' },
+  clearBtn: { padding: 4 },
 
-  /* Domain badge */
-  domainBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, marginTop: 12 },
-  domainBadgeText: { color: '#16a34a', fontSize: 13, fontWeight: '600' },
+  /* Hint box */
+  hintBox: {
+    backgroundColor: '#eff6ff', borderRadius: 10,
+    padding: 14, marginTop: 12,
+    borderWidth: 1, borderColor: '#bfdbfe',
+  },
+  hintText: { color: '#1d4ed8', fontSize: 13, lineHeight: 20, fontWeight: '500' },
 
-  /* Continue button */
-  continueBtn: { borderRadius: 18, overflow: 'hidden', marginTop: 24, shadowColor: '#6366f1', shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
-  continueBtnDisabled: { shadowOpacity: 0, elevation: 0 },
-  continueBtnGradient: { paddingVertical: 18, alignItems: 'center', justifyContent: 'center' },
-  continueBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
+  /* Dropdown */
+  dropdown: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5, borderTopWidth: 0, borderColor: '#6366f1',
+    borderBottomLeftRadius: 12, borderBottomRightRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#6366f1', shadowOpacity: 0.12, shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 }, elevation: 8,
+  },
+  dropdownRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: '#f1f5f9',
+  },
+  dropdownRowOther: { backgroundColor: '#f8faff' },
+  dropdownRowIcon: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: '#eef2ff', alignItems: 'center', justifyContent: 'center',
+    marginRight: 12,
+  },
+  dropdownRowName: { fontSize: 14, fontWeight: '700', color: '#0f172a', marginBottom: 1 },
+  dropdownRowDomain: { fontSize: 12, color: '#64748b', fontWeight: '500' },
 
-  /* Other link */
-  otherLink: { alignItems: 'center', paddingVertical: 16 },
-  otherLinkText: { color: '#94a3b8', fontSize: 13, fontWeight: '500' },
+  /* No results */
+  noResults: { padding: 20, alignItems: 'center' },
+  noResultsText: { color: '#64748b', fontSize: 14, fontWeight: '500', textAlign: 'center', marginBottom: 12 },
+  requestInline: { paddingVertical: 8 },
+  requestInlineText: { color: '#6366f1', fontSize: 14, fontWeight: '700' },
 
-  /* Modal overlay */
+  /* Modal */
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-
-  /* Bottom sheet */
-  pickerSheet: { backgroundColor: '#fff', borderTopLeftRadius: 32, borderTopRightRadius: 32, maxHeight: '85%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 24, shadowOffset: { width: 0, height: -4 }, elevation: 16 },
+  sheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 32, borderTopRightRadius: 32,
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 24,
+    shadowOffset: { width: 0, height: -4 }, elevation: 16,
+  },
   sheetHandle: { width: 40, height: 4, backgroundColor: '#e2e8f0', borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   sheetTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-
-  /* Sheet search */
-  sheetSearch: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8faff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, marginHorizontal: 20, marginVertical: 16, paddingHorizontal: 14, paddingVertical: 12 },
-  sheetSearchInput: { flex: 1, fontSize: 15, color: '#0f172a', fontWeight: '500' },
-
-  /* College row in list */
-  collegeRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 14, borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: '#f1f5f9' },
-  otherRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8faff', padding: 14, borderRadius: 16, marginBottom: 10, borderWidth: 1.5, borderColor: '#e2e8f0', marginTop: 4 },
-  collegeRowIcon: { width: 44, height: 44, borderRadius: 13, backgroundColor: 'rgba(99,102,241,0.1)', alignItems: 'center', justifyContent: 'center', marginRight: 14 },
-  collegeRowInfo: { flex: 1 },
-  collegeRowName: { fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 2 },
-  collegeRowDomain: { fontSize: 12, color: '#64748b', fontWeight: '500' },
-
-  /* Request input */
-  requestInput: { backgroundColor: '#f8faff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 16, height: 54, fontSize: 15, color: '#0f172a', marginBottom: 12 },
+  sheetSub: { color: '#64748b', fontSize: 14, lineHeight: 20, marginBottom: 20, marginTop: 16 },
+  modalInput: {
+    backgroundColor: '#f8faff', borderWidth: 1, borderColor: '#e2e8f0',
+    borderRadius: 14, paddingHorizontal: 16, height: 54,
+    fontSize: 15, color: '#0f172a', marginBottom: 12,
+  },
+  submitBtn: {
+    backgroundColor: '#6366f1', borderRadius: 16, height: 54,
+    justifyContent: 'center', alignItems: 'center', marginTop: 4,
+    shadowColor: '#6366f1', shadowOpacity: 0.3, shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 }, elevation: 6,
+  },
+  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
 });

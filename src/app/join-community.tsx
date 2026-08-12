@@ -46,7 +46,7 @@ export default function JoinCommunityScreen() {
   };
 
   const handleJoin = async (group: OfficialGroup) => {
-    if (!user) return;
+    if (!user?.id) return;
     setJoiningId(group.id);
     try {
       const { data: profile } = await supabase
@@ -60,13 +60,14 @@ export default function JoinCommunityScreen() {
       if (error && error.code !== '23505') throw error; // 23505 = already a member
 
       await supabase.rpc('increment_group_members', { g_id: group.id }).catch(() => {});
-      router.replace(`/group/${group.id}`);
+      router.push({ pathname: '/group/[id]', params: { id: group.id } });
     } catch (e: any) {
-      Alert.alert('Couldn\u2019t join', e.message ?? 'Please try again.');
+      Alert.alert("Couldn't join", e.message ?? 'Please try again.');
     } finally {
       setJoiningId(null);
     }
   };
+
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 12 }]}>

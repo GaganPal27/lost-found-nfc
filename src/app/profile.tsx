@@ -8,6 +8,7 @@ import { useItemStore } from '../stores/itemStore';
 import { PLAN_LIMITS } from '../lib/constants';
 import { supabase } from '../lib/supabase';
 import { useTabBarClearance } from '../components/FloatingTabBar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PLAN_FEATURES = {
   basic: ['Up to 2 items', 'NFC tags only', '7-day scan history', 'Basic notifications'],
@@ -295,6 +296,26 @@ export default function ProfileScreen() {
               </LinearGradient>
             </TouchableOpacity>
           )}
+
+          {/* Change Institution */}
+          <TouchableOpacity
+            onPress={async () => {
+              await AsyncStorage.multiRemove(['selectedCollegeId', 'selectedCollegeName', 'selectedCollegeDomain']);
+              router.replace('/select-college');
+            }}
+            className="mx-6 bg-white border border-slate-200 p-4 rounded-2xl mb-4 shadow-sm"
+            activeOpacity={0.7}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontSize: 20, marginRight: 12 }}>🏫</Text>
+              <View>
+                <Text className="text-slate-900 font-bold text-base">Change Institution</Text>
+                <Text className="text-slate-400 text-xs font-medium">Switch to a different university</Text>
+              </View>
+            </View>
+            <Text className="text-slate-400 font-bold">→</Text>
+          </TouchableOpacity>
 
           {/* Log Out */}
           <TouchableOpacity
