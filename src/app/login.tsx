@@ -39,7 +39,7 @@ export default function LoginScreen() {
 
   const handleChangeInstitution = async () => {
     await AsyncStorage.multiRemove(['selectedCollegeId', 'selectedCollegeName', 'selectedCollegeDomain']);
-    router.replace('/select-college');
+    router.push('/select-college');
   };
 
   const handleLogin = async () => {
