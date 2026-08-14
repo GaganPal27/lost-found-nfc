@@ -70,6 +70,15 @@ export default function SelectCollegeScreen() {
       await AsyncStorage.setItem('selectedCollegeId', college.id);
       await AsyncStorage.setItem('selectedCollegeName', college.name);
       await AsyncStorage.setItem('selectedCollegeDomain', college.domain ?? '');
+
+      // If the user already has a session, they came here to change institution — go home
+      const { supabase } = await import('../lib/supabase');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.replace('/');
+        return;
+      }
+
       const hasSeen = await AsyncStorage.getItem('hasSeenOnboarding');
       if (hasSeen === 'true') {
         router.replace('/login');

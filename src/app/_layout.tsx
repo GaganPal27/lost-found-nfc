@@ -300,7 +300,9 @@ function RootLayout() {
       AsyncStorage.getItem('hasSeenOnboarding').then((hasSeen) => {
         if (hasSeen !== 'true' && !inOnboarding) {
           router.replace('/onboarding');
-        } else if (hasSeen === 'true' && (inAuthScreen || inOnboarding || inSelectCollege)) {
+        } else if (hasSeen === 'true' && (inAuthScreen || inOnboarding)) {
+          // Note: inSelectCollege is intentionally NOT here — authenticated users
+          // are allowed to visit select-college to change their institution.
           router.replace('/');
         }
       });
