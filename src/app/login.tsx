@@ -55,6 +55,34 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
+      {/* ── Institution Header (outside scroll view — has no inputs, doesn't need keyboard avoidance,
+           and Android's KeyboardAwareScrollView eats touch events at scroll position 0) ── */}
+      <View style={[styles.institutionHeader, { paddingTop: insets.top + 32 }]}>
+        {/* App brand */}
+        <View style={styles.brandRow}>
+          <Text style={styles.brandEmoji}>📡</Text>
+          <Text style={styles.brandName}>Keepr</Text>
+        </View>
+
+        {/* Institution name — the focal point */}
+        {institutionName ? (
+          <>
+            <Text style={styles.institutionName}>{institutionName}</Text>
+            <TouchableOpacity
+              onPress={handleChangeInstitution}
+              activeOpacity={0.6}
+              style={styles.notFromWrap}
+              hitSlop={{ top: 12, bottom: 12, left: 20, right: 20 }}
+            >
+              <Text style={styles.notFromText}>Not from {institutionName}?</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <ActivityIndicator color="#6366f1" style={{ marginTop: 16 }} />
+        )}
+      </View>
+
+      {/* ── Form (keyboard-aware, inputs only) ── */}
       <KeyboardAwareScrollView
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
@@ -62,32 +90,6 @@ export default function LoginScreen() {
         extraScrollHeight={20}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Institution Header (Camu-style) ── */}
-        <View style={[styles.institutionHeader, { paddingTop: insets.top + 32 }]}>
-          {/* App brand */}
-          <View style={styles.brandRow}>
-            <Text style={styles.brandEmoji}>📡</Text>
-            <Text style={styles.brandName}>Keepr</Text>
-          </View>
-
-          {/* Institution name — the focal point */}
-          {institutionName ? (
-            <>
-              <Text style={styles.institutionName}>{institutionName}</Text>
-              <TouchableOpacity
-                onPress={handleChangeInstitution}
-                activeOpacity={0.7}
-                style={styles.notFromWrap}
-              >
-                <Text style={styles.notFromText}>Not from {institutionName}?</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <ActivityIndicator color="#6366f1" style={{ marginTop: 16 }} />
-          )}
-        </View>
-
-        {/* ── Form ── */}
         <View style={styles.body}>
           {/* Email */}
           <View style={styles.fieldGroup}>
