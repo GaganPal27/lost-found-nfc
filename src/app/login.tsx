@@ -38,8 +38,13 @@ export default function LoginScreen() {
   }, []);
 
   const handleChangeInstitution = async () => {
-    await AsyncStorage.multiRemove(['selectedCollegeId', 'selectedCollegeName', 'selectedCollegeDomain']);
-    router.push('/select-college');
+    try {
+      await AsyncStorage.multiRemove(['selectedCollegeId', 'selectedCollegeName', 'selectedCollegeDomain']);
+      Alert.alert('ABOUT TO PUSH'); // DIAG: does it reach here?
+      router.push('/select-college' as any);
+    } catch (e: any) {
+      Alert.alert('ERROR', e?.message ?? String(e)); // DIAG: catch silent throws
+    }
   };
 
   const handleLogin = async () => {
