@@ -38,7 +38,6 @@ export default function LoginScreen() {
   }, []);
 
   const handleChangeInstitution = async () => {
-    Alert.alert('TAPPED'); // DIAGNOSTIC — remove after test
     await AsyncStorage.multiRemove(['selectedCollegeId', 'selectedCollegeName', 'selectedCollegeDomain']);
     router.push('/select-college');
   };
