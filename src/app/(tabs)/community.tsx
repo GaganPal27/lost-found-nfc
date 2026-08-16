@@ -195,6 +195,7 @@ export default function CommunityScreen() {
   const [communityName, setCommunityName] = useState<string | null>(null);
   const [communityMemberCount, setCommunityMemberCount] = useState<number | null>(null);
   const [userCollegeId, setUserCollegeId] = useState<string | null>(null);
+  const [membershipStatus, setMembershipStatus] = useState<'active' | 'requested' | 'rejected'>('active');
 
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   useEffect(() => { if (tabParam === 'groups') setActiveTab('groups'); }, [tabParam]);
@@ -204,17 +205,19 @@ export default function CommunityScreen() {
     (async () => {
       const { data } = await supabase
         .from('group_members')
-        .select('community_groups!inner(id, name, member_count, is_official, college_id)')
+        .select('membership_status, community_groups!inner(id, name, member_count, is_official, college_id)')
         .eq('user_id', dbUserId)
         .eq('community_groups.is_official', true)
         .eq('status', 'active')
         .limit(1)
         .maybeSingle();
       const group = (data as any)?.community_groups;
+      const status = (data as any)?.membership_status ?? 'active';
       if (group) {
         setCommunityName(group.name);
         setCommunityMemberCount(group.member_count ?? null);
         setUserCollegeId(group.college_id ?? null);
+        setMembershipStatus(status as any);
       }
     })();
   }, [dbUserId]);
@@ -336,6 +339,26 @@ export default function CommunityScreen() {
           </TouchableOpacity>
         </View>
       </LinearGradient>
+
+      {/* ── Verification Banners ── */}
+      {membershipStatus === 'requested' && (
+        <View style={styles.bannerRequested}>
+          <Text style={styles.bannerTitle}>🔔 Requested member</Text>
+          <Text style={styles.bannerBody}>Your ID is under review. You can post, but a mod may revoke access if it doesn't check out.</Text>
+          <TouchableOpacity onPress={() => router.push('/id-verification' as any)} activeOpacity={0.8}>
+            <Text style={styles.bannerLink}>Upload / update ID →</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {membershipStatus === 'rejected' && (
+        <View style={styles.bannerRejected}>
+          <Text style={styles.bannerTitle}>❌ Membership not approved</Text>
+          <Text style={styles.bannerBody}>Upload a clearer ID to try again. You can still browse the board.</Text>
+          <TouchableOpacity onPress={() => router.push('/id-verification' as any)} activeOpacity={0.8}>
+            <Text style={styles.bannerLinkRed}>Re-upload ID →</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Body ── */}
       <View style={styles.body}>
@@ -469,4 +492,18 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 32 },
   emptyTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
   emptySub: { color: '#64748b', textAlign: 'center', fontSize: 14, lineHeight: 22 },
+
+  /* Verification banners */
+  bannerRequested: {
+    backgroundColor: '#fffbeb', borderBottomWidth: 1, borderBottomColor: '#fde68a',
+    paddingHorizontal: 20, paddingVertical: 14,
+  },
+  bannerRejected: {
+    backgroundColor: '#fff1f2', borderBottomWidth: 1, borderBottomColor: '#fecdd3',
+    paddingHorizontal: 20, paddingVertical: 14,
+  },
+  bannerTitle: { fontSize: 14, fontWeight: '800', color: '#0f172a', marginBottom: 4 },
+  bannerBody:  { fontSize: 13, color: '#64748b', lineHeight: 18, marginBottom: 8 },
+  bannerLink:    { fontSize: 13, color: '#6366f1', fontWeight: '700' },
+  bannerLinkRed: { fontSize: 13, color: '#ef4444', fontWeight: '700' },
 });

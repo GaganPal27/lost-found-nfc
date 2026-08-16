@@ -130,20 +130,68 @@ export default function RegistrationScreen() {
         age_declared_at: now,
       }, { onConflict: 'id' });
 
-      // College auto-join
+      // ── College auto-join: Track 1 (institutional) vs Track 2 (personal email) ──
+      let needsIdVerification = false;
+      let verificationGroupId: string | null = null;
+
       try {
-        const collegeId = await AsyncStorage.getItem('selectedCollegeId');
+        const collegeId     = await AsyncStorage.getItem('selectedCollegeId');
+        const collegeDomain = await AsyncStorage.getItem('selectedCollegeDomain');
+
         if (collegeId && collegeId !== 'other') {
           const collegeName = await AsyncStorage.getItem('selectedCollegeName') || 'College Community';
-          let { data: existingGroup } = await supabase.from('community_groups').select('id').eq('college_id', collegeId).single();
-          let groupId = existingGroup?.id;
-          if (!groupId) {
-            const { data: newGroup } = await supabase.from('community_groups').insert({ name: collegeName, is_official: true, created_by: data.user.id, college_id: collegeId }).select('id').single();
-            groupId = newGroup?.id;
+
+          // Determine Track 1 vs Track 2 based on email domain
+          const emailDomain = email.trim().split('@')[1]?.toLowerCase();
+          const isTrack1 = !!(collegeDomain && emailDomain && emailDomain === collegeDomain.toLowerCase());
+
+          // The handle_new_user trigger already created the users row — fetch internal ID.
+          // Retry once in case of trigger latency.
+          let internalUserId: string | null = null;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const { data: profile } = await supabase
+              .from('users').select('id').eq('auth_id', data.user.id).single();
+            internalUserId = profile?.id ?? null;
+            if (internalUserId) break;
+            await new Promise(r => setTimeout(r, 800)); // wait for trigger
           }
-          if (groupId) {
-            await supabase.from('group_members').insert({ group_id: groupId, user_id: data.user.id, role: 'member', status: 'active', verified: true });
-            await supabase.rpc('increment_group_members', { g_id: groupId }).catch(() => {});
+
+          if (!internalUserId) {
+            console.warn('Could not fetch internal user ID — skipping community auto-join');
+          } else {
+            // Find or create the official community for this college
+            let { data: existingGroup } = await supabase
+              .from('community_groups').select('id').eq('college_id', collegeId).maybeSingle();
+            let groupId = existingGroup?.id;
+
+            if (!groupId) {
+              const { data: newGroup } = await supabase
+                .from('community_groups')
+                .insert({ name: collegeName, is_official: true, creator_id: internalUserId, college_id: collegeId })
+                .select('id').single();
+              groupId = newGroup?.id;
+            }
+
+            if (groupId) {
+              if (isTrack1) {
+                // Track 1: institutional email → verified, full access immediately
+                await supabase.from('group_members').upsert({
+                  group_id: groupId, user_id: internalUserId,
+                  role: 'member', status: 'active',
+                  verified: true, membership_status: 'active',
+                }, { onConflict: 'group_id,user_id' });
+              } else {
+                // Track 2: personal email → requested, needs ID upload
+                await supabase.from('group_members').upsert({
+                  group_id: groupId, user_id: internalUserId,
+                  role: 'member', status: 'active',
+                  verified: false, membership_status: 'requested',
+                }, { onConflict: 'group_id,user_id' });
+                needsIdVerification = true;
+                verificationGroupId = groupId;
+              }
+              await supabase.rpc('increment_group_members', { g_id: groupId }).catch(() => {});
+            }
           }
         }
       } catch (collegeErr) { console.warn('Failed to auto-join college community', collegeErr); }
@@ -156,11 +204,14 @@ export default function RegistrationScreen() {
       }
 
       if (!data.session) {
-        Alert.alert(
-          '📧 Confirm your email',
-          `We sent a confirmation link to ${email}. Click it to activate your account, then sign in.`,
-          [{ text: 'OK', onPress: () => router.replace('/login') }]
-        );
+        // Email confirmation required — they'll be routed to ID upload after login if Track 2
+        const msg = needsIdVerification
+          ? `We sent a confirmation link to ${email}. After confirming, sign in and you'll be prompted to upload your student ID.`
+          : `We sent a confirmation link to ${email}. Click it to activate your account, then sign in.`;
+        Alert.alert('📧 Confirm your email', msg, [{ text: 'OK', onPress: () => router.replace('/login') }]);
+      } else if (needsIdVerification && verificationGroupId) {
+        // Track 2 with immediate session — go to ID upload right now
+        router.replace({ pathname: '/id-verification', params: { groupId: verificationGroupId } } as any);
       }
     }
     setLoading(false);
