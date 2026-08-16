@@ -300,7 +300,9 @@ export default function ProfileScreen() {
           {/* Change Institution */}
           <TouchableOpacity
             onPress={async () => {
-              await AsyncStorage.multiRemove(['selectedCollegeId', 'selectedCollegeName', 'selectedCollegeDomain']);
+              await AsyncStorage.removeItem('selectedCollegeId');
+              await AsyncStorage.removeItem('selectedCollegeName');
+              await AsyncStorage.removeItem('selectedCollegeDomain');
               router.replace('/select-college');
             }}
             className="mx-6 bg-white border border-slate-200 p-4 rounded-2xl mb-4 shadow-sm"
