@@ -90,6 +90,23 @@ export default function SelectCollegeScreen() {
     }
   };
 
+  // Track 3: general account, no institution binding
+  const handleContinueWithoutInstitution = async () => {
+    try {
+      await AsyncStorage.setItem('selectedCollegeId', 'none');
+      await AsyncStorage.setItem('selectedCollegeName', '');
+      await AsyncStorage.setItem('selectedCollegeDomain', '');
+      const hasSeen = await AsyncStorage.getItem('hasSeenOnboarding');
+      if (hasSeen === 'true') {
+        router.replace('/login');
+      } else {
+        router.replace('/onboarding');
+      }
+    } catch (err) {
+      console.error('Failed to set general account preference', err);
+    }
+  };
+
   const handleSubmitRequest = async () => {
     if (!requestName.trim()) {
       Alert.alert('Required', 'Please enter your institution name.');
@@ -240,6 +257,20 @@ export default function SelectCollegeScreen() {
               )}
             </View>
           )}
+
+          {/* Track 3: continue without any institution */}
+          <TouchableOpacity
+            onPress={handleContinueWithoutInstitution}
+            activeOpacity={0.7}
+            style={styles.skipInstitution}
+          >
+            <Text style={styles.skipInstitutionText}>
+              Continue without an institution
+            </Text>
+            <Text style={styles.skipInstitutionSub}>
+              For alumni, general users, or anyone just exploring
+            </Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
 
@@ -387,4 +418,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 }, elevation: 6,
   },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+
+  /* Track 3 — skip institution */
+  skipInstitution: {
+    marginTop: 28,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  skipInstitutionText: { fontSize: 14, color: '#64748b', fontWeight: '700' },
+  skipInstitutionSub:  { fontSize: 12, color: '#94a3b8', marginTop: 3, fontWeight: '500' },
 });

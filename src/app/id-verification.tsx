@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, Image, Alert,
-  StatusBar, StyleSheet, ActivityIndicator, ScrollView,
+  StatusBar, StyleSheet, ActivityIndicator, ScrollView, BackHandler,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
@@ -18,6 +19,21 @@ export default function IdVerificationScreen() {
 
   const [imageUri, setImageUri]   = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Intercept Android hardware back — always go to community, never to a legacy screen
+  const goBack = useCallback(() => {
+    router.replace('/(tabs)/community' as any);
+  }, [router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        goBack();
+        return true; // prevent default back behaviour
+      });
+      return () => sub.remove();
+    }, [goBack])
+  );
 
   // ── Pick from gallery ────────────────────────────────────────────────────
   const pickFromGallery = async () => {
@@ -116,7 +132,7 @@ export default function IdVerificationScreen() {
         colors={['#6366f1', '#7c3aed']}
         style={[styles.header, { paddingTop: insets.top + 16 }]}
       >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity onPress={goBack} style={styles.backBtn} activeOpacity={0.7}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerEmoji}>🪪</Text>

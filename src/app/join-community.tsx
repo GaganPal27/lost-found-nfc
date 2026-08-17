@@ -49,18 +49,41 @@ export default function JoinCommunityScreen() {
     if (!user?.id) return;
     setJoiningId(group.id);
     try {
+      // Fetch internal user profile
       const { data: profile } = await supabase
-        .from('users').select('id').eq('auth_id', user.id).single();
+        .from('users').select('id, email').eq('auth_id', user.id).single();
       if (!profile) throw new Error('Profile not found');
 
+      // Fetch the group's domain to apply Track 1 / Track 2 logic
+      const { data: groupData } = await supabase
+        .from('community_groups').select('domain').eq('id', group.id).single();
+      const groupDomain = groupData?.domain?.toLowerCase() ?? null;
+      const emailDomain = profile.email?.split('@')[1]?.toLowerCase() ?? null;
+      const isTrack1 = !!(groupDomain && emailDomain && emailDomain === groupDomain);
+
+      // Upsert so re-joining after leaving doesn't throw a duplicate error
       const { error } = await supabase
         .from('group_members')
-        .insert({ group_id: group.id, user_id: profile.id, role: 'member', status: 'active', verified: false });
+        .upsert({
+          group_id: group.id,
+          user_id: profile.id,
+          role: 'member',
+          status: 'active',
+          verified: isTrack1,
+          membership_status: isTrack1 ? 'active' : 'requested',
+        }, { onConflict: 'group_id,user_id' });
 
-      if (error && error.code !== '23505') throw error; // 23505 = already a member
+      if (error) throw error;
 
       await supabase.rpc('increment_group_members', { g_id: group.id }).catch(() => {});
-      router.push({ pathname: '/group/[id]', params: { id: group.id } });
+
+      if (isTrack1) {
+        // Track 1: straight into the community group
+        router.push({ pathname: '/group/[id]', params: { id: group.id } });
+      } else {
+        // Track 2: route to ID upload before entering the group
+        router.push({ pathname: '/id-verification', params: { groupId: group.id } } as any);
+      }
     } catch (e: any) {
       Alert.alert("Couldn't join", e.message ?? 'Please try again.');
     } finally {
