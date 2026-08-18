@@ -307,6 +307,7 @@ export default function CommunityScreen() {
           >
             <Text style={styles.track3HeaderLabel}>YOUR COMMUNITY</Text>
             <Text style={styles.track3HeaderTitle}>Community</Text>
+          </LinearGradient>
           <View style={styles.track3Body}>
             <Text style={{ fontSize: 56, marginBottom: 16 }}>🏛️</Text>
             <Text style={styles.track3Title}>No community linked</Text>
@@ -325,6 +326,102 @@ export default function CommunityScreen() {
           </View>
         </View>
       ) : (
+        <>
+          <LinearGradient
+        colors={['#6366f1', '#7c3aed']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + 16 }]}
+      >
+        <View style={styles.hCircle1} />
+        <View style={styles.hCircle2} />
+
+        <View style={styles.headerTop}>
+          <View style={{ flex: 1, paddingRight: 16 }}>
+            <Text style={styles.headerLabel}>YOUR COMMUNITY</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {communityName ?? 'Community'}
+            </Text>
+            {communityMemberCount != null && (
+              <Text style={styles.headerMemberCount}>
+                {communityMemberCount.toLocaleString()} member{communityMemberCount === 1 ? '' : 's'}
+              </Text>
+            )}
+          </View>
+          <TouchableOpacity style={styles.bellBtn} onPress={() => router.push('/notifications' as any)} activeOpacity={0.8}>
+            <Feather name="bell" size={20} color="#6366f1" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Search */}
+        <View style={styles.searchBar}>
+          <Feather name="search" size={16} color="#94a3b8" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search posts or groups..."
+            placeholderTextColor="#94a3b8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Feather name="x" size={16} color="#94a3b8" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Tabs */}
+        <View style={styles.tabRow}>
+          <TouchableOpacity style={[styles.tabBtn, activeTab === 'feed' && styles.tabBtnActive]} onPress={() => setActiveTab('feed')} activeOpacity={0.8}>
+            <Text style={[styles.tabBtnText, activeTab === 'feed' && styles.tabBtnTextActive]}>Found & Lost Board</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.tabBtn, activeTab === 'groups' && styles.tabBtnActive]} onPress={() => setActiveTab('groups')} activeOpacity={0.8}>
+            <Text style={[styles.tabBtnText, activeTab === 'groups' && styles.tabBtnTextActive]}>Local Groups</Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+
+      {/* ── Verification Banners ── */}
+      {membershipStatus === 'requested' && (
+        <View style={styles.bannerRequested}>
+          <Text style={styles.bannerTitle}>🔔 Requested member</Text>
+          <Text style={styles.bannerBody}>Your ID is under review. You can post, but a mod may revoke access if it doesn't check out.</Text>
+          <TouchableOpacity onPress={() => router.push('/id-verification' as any)} activeOpacity={0.8}>
+            <Text style={styles.bannerLink}>Upload / update ID →</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {membershipStatus === 'rejected' && (
+        <View style={styles.bannerRejected}>
+          <Text style={styles.bannerTitle}>❌ Membership not approved</Text>
+          <Text style={styles.bannerBody}>Upload a clearer ID to try again. You can still browse the board.</Text>
+          <TouchableOpacity onPress={() => router.push('/id-verification' as any)} activeOpacity={0.8}>
+            <Text style={styles.bannerLinkRed}>Re-upload ID →</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Body ── */}
+      <View style={styles.body}>
+        {loading ? (
+          <View style={styles.center}><ActivityIndicator size="large" color="#6366f1" /></View>
+        ) : activeTab === 'feed' ? (
+          <FlatList
+            data={filteredFeed}
+            keyExtractor={i => `${i.postType}-${i.id}`}
+            renderItem={({ item }) => <PostCard post={item} currentUserId={dbUserId} onResolve={handleResolve} onDelete={handleDelete} onReport={handleReport} />}
+            contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366f1" />}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={{ fontSize: 52, marginBottom: 12 }}>📋</Text>
+                <Text style={styles.emptyTitle}>{searchQuery ? 'No results found' : 'Board is empty'}</Text>
+                <Text style={styles.emptySub}>Tap + to report a found or lost item.</Text>
+              </View>
+            }
+          />
+        ) : (
           <FlatList
             data={groups}
             keyExtractor={i => i.id}
@@ -354,6 +451,7 @@ export default function CommunityScreen() {
           />
         )}
       </View>
+      </>
       )}
     </View>
   );
