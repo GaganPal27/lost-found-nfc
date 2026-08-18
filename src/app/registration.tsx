@@ -138,7 +138,7 @@ export default function RegistrationScreen() {
         const collegeId     = await AsyncStorage.getItem('selectedCollegeId');
         const collegeDomain = await AsyncStorage.getItem('selectedCollegeDomain');
 
-        if (collegeId && collegeId !== 'other') {
+        if (collegeId && collegeId !== 'other' && collegeId !== 'none') {
           const collegeName = await AsyncStorage.getItem('selectedCollegeName') || 'College Community';
 
           // Determine Track 1 vs Track 2 based on email domain

@@ -258,18 +258,20 @@ export default function SelectCollegeScreen() {
             </View>
           )}
 
-          {/* Track 3: continue without any institution */}
+          {/* Track 3: continue with email — no institution binding */}
           <TouchableOpacity
             onPress={handleContinueWithoutInstitution}
-            activeOpacity={0.7}
-            style={styles.skipInstitution}
+            activeOpacity={0.85}
+            style={styles.emailCard}
           >
-            <Text style={styles.skipInstitutionText}>
-              Continue without an institution
-            </Text>
-            <Text style={styles.skipInstitutionSub}>
-              For alumni, general users, or anyone just exploring
-            </Text>
+            <View style={styles.emailCardIcon}>
+              <Text style={{ fontSize: 22 }}>📧</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.emailCardTitle}>Continue with email</Text>
+              <Text style={styles.emailCardSub}>For alumni, general users, or anyone just exploring</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="#94a3b8" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -419,14 +421,32 @@ const styles = StyleSheet.create({
   },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
 
-  /* Track 3 — skip institution */
-  skipInstitution: {
-    marginTop: 28,
-    paddingVertical: 14,
+  /* Track 3 — Continue with email card */
+  emailCard: {
+    marginTop: 20,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    backgroundColor: '#f8faff',
+    borderWidth: 1.5,
+    borderColor: '#e0e7ff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#6366f1',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
-  skipInstitutionText: { fontSize: 14, color: '#64748b', fontWeight: '700' },
-  skipInstitutionSub:  { fontSize: 12, color: '#94a3b8', marginTop: 3, fontWeight: '500' },
+  emailCardIcon: {
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: '#eef2ff',
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 14,
+  },
+  emailCardTitle: {
+    fontSize: 15, fontWeight: '800', color: '#0f172a', marginBottom: 2,
+  },
+  emailCardSub: {
+    fontSize: 12, color: '#64748b', fontWeight: '500',
+  },
 });

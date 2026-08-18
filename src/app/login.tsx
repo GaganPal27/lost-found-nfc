@@ -1,12 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Alert,
-  StatusBar, StyleSheet, ActivityIndicator,
+  StatusBar, StyleSheet, ActivityIndicator, BackHandler,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -17,8 +17,10 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
-  // Institution selected on the select-college screen
+  // Institution selected on the select-college screen.
+  // null  = loading  |  ''  = Track 3 (no institution)  |  string = institution name
   const [institutionName, setInstitutionName] = useState<string | null>(null);
+  const [isTrack3, setIsTrack3] = useState(false);
 
   const passwordRef = useRef<TextInput>(null);
   const router = useRouter();
@@ -29,13 +31,29 @@ export default function LoginScreen() {
       const name = await AsyncStorage.getItem('selectedCollegeName');
       const id   = await AsyncStorage.getItem('selectedCollegeId');
       if (!id) {
-        // No institution chosen yet — send them to picker first
         router.replace('/select-college');
         return;
       }
-      setInstitutionName(name ?? null);
+      if (id === 'none') {
+        // Track 3: no institution — skip all college loading, show generic header
+        setIsTrack3(true);
+        setInstitutionName(''); // non-null so the spinner hides
+        return;
+      }
+      setInstitutionName(name || null);
     })();
   }, []);
+
+  // Hardware back always goes to select-college — prevents landing on a stale login screen
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        router.replace('/select-college');
+        return true;
+      });
+      return () => sub.remove();
+    }, [])
+  );
 
   const handleChangeInstitution = async () => {
     await AsyncStorage.removeItem('selectedCollegeId');
@@ -66,8 +84,13 @@ export default function LoginScreen() {
           <Text style={styles.brandName}>Keepr</Text>
         </View>
 
-        {/* Institution name — the focal point */}
-        {institutionName ? (
+        {/* Institution name — null = loading, '' = track 3, string = institution */}
+        {institutionName === null ? (
+          <ActivityIndicator color="#6366f1" style={{ marginTop: 16 }} />
+        ) : isTrack3 ? (
+          // Track 3: no institution — clean generic header, no institution name, no change link
+          <Text style={styles.track3Subtitle}>Sign in to your account</Text>
+        ) : (
           <>
             <Text style={styles.institutionName}>{institutionName}</Text>
             <TouchableOpacity
@@ -79,8 +102,6 @@ export default function LoginScreen() {
               <Text style={styles.notFromText}>Not from {institutionName}?</Text>
             </TouchableOpacity>
           </>
-        ) : (
-          <ActivityIndicator color="#6366f1" style={{ marginTop: 16 }} />
         )}
       </View>
 
@@ -216,6 +237,10 @@ const styles = StyleSheet.create({
   notFromText: {
     color: '#6366f1', fontSize: 15, fontWeight: '700',
     textDecorationLine: 'underline',
+  },
+  track3Subtitle: {
+    color: '#64748b', fontSize: 16, fontWeight: '500',
+    textAlign: 'center', marginTop: 4,
   },
 
   /* ── Body ── */

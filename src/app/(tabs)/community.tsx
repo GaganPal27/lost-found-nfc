@@ -11,6 +11,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTabBarClearance } from '../../components/FloatingTabBar';
 import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type PostType = 'found' | 'lost';
@@ -196,12 +197,23 @@ export default function CommunityScreen() {
   const [communityMemberCount, setCommunityMemberCount] = useState<number | null>(null);
   const [userCollegeId, setUserCollegeId] = useState<string | null>(null);
   const [membershipStatus, setMembershipStatus] = useState<'active' | 'requested' | 'rejected'>('active');
+  // null = not yet checked | true = Track 3 | false = Track 1 or 2
+  const [isTrack3, setIsTrack3] = useState<boolean | null>(null);
 
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   useEffect(() => { if (tabParam === 'groups') setActiveTab('groups'); }, [tabParam]);
 
+  // Check Track 3 first — if selectedCollegeId is 'none', skip all DB queries
   useEffect(() => {
-    if (!dbUserId) return;
+    AsyncStorage.getItem('selectedCollegeId').then(id => {
+      const track3 = !id || id === 'none';
+      setIsTrack3(track3);
+      if (track3) setLoading(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!dbUserId || isTrack3 === null || isTrack3) return; // wait or skip for Track 3
     (async () => {
       const { data } = await supabase
         .from('group_members')
@@ -220,15 +232,16 @@ export default function CommunityScreen() {
         setMembershipStatus(status as any);
       }
     })();
-  }, [dbUserId]);
+  }, [dbUserId, isTrack3]);
 
   useEffect(() => {
+    if (isTrack3 === null || isTrack3) return; // skip for Track 3
     fetchAll(true);
     const s1 = supabase.channel('feed_found_v2').on('postgres_changes', { event: '*', schema: 'public', table: 'community_items' }, () => fetchAll(false)).subscribe();
     const s2 = supabase.channel('feed_lost_v2').on('postgres_changes', { event: '*', schema: 'public', table: 'lost_item_posts' }, () => fetchAll(false)).subscribe();
     const s3 = supabase.channel('feed_groups_v2').on('postgres_changes', { event: '*', schema: 'public', table: 'community_groups' }, () => fetchAll(false)).subscribe();
     return () => { try { supabase.removeChannel(s1); supabase.removeChannel(s2); supabase.removeChannel(s3); } catch {} };
-  }, [userCollegeId]);
+  }, [userCollegeId, isTrack3]);
 
   useEffect(() => {
     if (!searchQuery.trim()) { setFilteredFeed(feed); }
@@ -285,7 +298,34 @@ export default function CommunityScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#6366f1" />
 
-      {/* ── Gradient Header ── */}
+      {/* ── Track 3 Empty State — shown instead of whole community UI ── */}
+      {isTrack3 === true ? (
+        <View style={styles.track3Container}>
+          <LinearGradient
+            colors={['#6366f1', '#7c3aed']}
+            style={[styles.track3Header, { paddingTop: insets.top + 20 }]}
+          >
+            <Text style={styles.track3HeaderLabel}>YOUR COMMUNITY</Text>
+            <Text style={styles.track3HeaderTitle}>Community</Text>
+          </LinearGradient>
+          <View style={styles.track3Body}>
+            <Text style={{ fontSize: 56, marginBottom: 16 }}>🏛️</Text>
+            <Text style={styles.track3Title}>No community linked</Text>
+            <Text style={styles.track3Sub}>
+              You signed in without an institution. Find your college or university to access the community board.
+            </Text>
+            <TouchableOpacity
+              style={styles.track3Btn}
+              onPress={() => router.push('/join-community' as any)}
+              activeOpacity={0.88}
+            >
+              <LinearGradient colors={['#6366f1', '#7c3aed']} style={styles.track3BtnGrad} start={{x:0,y:0}} end={{x:1,y:0}}>
+                <Text style={styles.track3BtnText}>Find your institution</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
       <LinearGradient
         colors={['#6366f1', '#7c3aed']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -410,6 +450,7 @@ export default function CommunityScreen() {
           />
         )}
       </View>
+      )}
     </View>
   );
 }
@@ -506,4 +547,23 @@ const styles = StyleSheet.create({
   bannerBody:  { fontSize: 13, color: '#64748b', lineHeight: 18, marginBottom: 8 },
   bannerLink:    { fontSize: 13, color: '#6366f1', fontWeight: '700' },
   bannerLinkRed: { fontSize: 13, color: '#ef4444', fontWeight: '700' },
+
+  /* Track 3 — no institution */
+  track3Container: { flex: 1 },
+  track3Header: {
+    paddingHorizontal: 20, paddingBottom: 24, alignItems: 'flex-start',
+  },
+  track3HeaderLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  track3HeaderTitle: { color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: -0.5, marginTop: 2 },
+  track3Body: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 32, paddingBottom: 80,
+  },
+  track3Title: { fontSize: 22, fontWeight: '900', color: '#0f172a', marginBottom: 12, textAlign: 'center' },
+  track3Sub: { fontSize: 14, color: '#64748b', lineHeight: 22, textAlign: 'center', marginBottom: 32 },
+  track3Btn: { borderRadius: 18, overflow: 'hidden', width: '100%',
+    shadowColor: '#6366f1', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4,
+  },
+  track3BtnGrad: { paddingVertical: 17, alignItems: 'center', borderRadius: 18 },
+  track3BtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
 });
