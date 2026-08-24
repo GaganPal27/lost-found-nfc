@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { updateUserLocation } from '../lib/location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CATEGORIES = ['Personal', 'Electronics', 'Bag', 'Keys', 'Wallet', 'Travel', 'Other'];
 
@@ -28,6 +29,7 @@ export default function CreateLostPostScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [location, setLocation] = useState<any>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [isTrack3, setIsTrack3] = useState(false);
   const insets = useSafeAreaInsets();
 
   const pickImage = async () => {
@@ -110,6 +112,10 @@ export default function CreateLostPostScreen() {
       setLocationError('Location error. Proceeding without GPS.');
       setLocation({ coords: { latitude: 0, longitude: 0 } });
     });
+
+    AsyncStorage.getItem('selectedCollegeId').then(id => {
+      setIsTrack3(!id || id === 'none');
+    });
   }, [user?.id]);
 
   const triggerShake = () => {
@@ -166,7 +172,8 @@ export default function CreateLostPostScreen() {
         last_seen_lng: location.coords.longitude,
         radius_km: radiusKm,
         image_url: imageUri,
-        status: 'searching'
+        status: 'searching',
+        is_public: isTrack3,
       }).select().single();
 
       if (error) throw error;

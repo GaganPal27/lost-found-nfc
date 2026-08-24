@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CATEGORIES = ['Personal', 'Electronics', 'Bag', 'Keys', 'Wallet', 'Travel', 'Other'];
 
@@ -42,10 +43,11 @@ export default function CreateCommunityPostScreen() {
 
   // Resolved users.id (not auth.uid)
   const [dbUserId, setDbUserId] = useState<string | null>(null);
+  // Track 3: user signed in without an institution
+  const [isTrack3, setIsTrack3] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
-    // Look up the custom users.id by matching auth_id = auth.uid()
     supabase
       .from('users')
       .select('id')
@@ -54,6 +56,9 @@ export default function CreateCommunityPostScreen() {
       .then(({ data }) => {
         if (data?.id) setDbUserId(data.id);
       });
+    AsyncStorage.getItem('selectedCollegeId').then(id => {
+      setIsTrack3(!id || id === 'none');
+    });
   }, [user]);
 
   // ── Image picker ─────────────────────────────────────────────────────
@@ -120,25 +125,53 @@ export default function CreateCommunityPostScreen() {
 
     setLoading(true);
     try {
-      // Grab GPS silently (non-blocking)
       let lat: number | null = null;
       let lng: number | null = null;
       let locationLabel: string | null = null;
-      try {
+
+      if (isTrack3) {
+        // Track 3: location is REQUIRED — public posts need coords to be discoverable
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
+        if (status !== 'granted') {
+          Alert.alert(
+            'Location Required',
+            'Your location is needed so nearby people can find this item. Please enable location access in your phone Settings.',
+          );
+          setLoading(false);
+          return;
+        }
+        try {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
           lat = loc.coords.latitude;
           lng = loc.coords.longitude;
           try {
             const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
             if (place) {
-              const parts = [place.name, place.district || place.subregion, place.city].filter(Boolean);
-              locationLabel = parts.join(', ');
+              locationLabel = [place.name, place.district || place.subregion, place.city].filter(Boolean).join(', ');
             }
           } catch (_) {}
+        } catch {
+          Alert.alert('Location Error', 'Could not get your GPS location. Please try again outdoors or check GPS settings.');
+          setLoading(false);
+          return;
         }
-      } catch (_) {}
+      } else {
+        // Track 1/2: grab GPS silently — nice-to-have, not required
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            lat = loc.coords.latitude;
+            lng = loc.coords.longitude;
+            try {
+              const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+              if (place) {
+                locationLabel = [place.name, place.district || place.subregion, place.city].filter(Boolean).join(', ');
+              }
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
 
       const { data: insertedData, error } = await supabase.from('community_items').insert({
         finder_id:          dbUserId,
@@ -151,11 +184,11 @@ export default function CreateCommunityPostScreen() {
         image_url:          imageUrl,
         status:             'open',
         proof_question:     proofQuestion.trim(),
+        is_public:          isTrack3,
       }).select().single();
 
       if (error) throw error;
 
-      // Trigger Smart Match edge function in the background
       supabase.functions.invoke('smart-match', {
         body: { record: insertedData },
       }).catch(err => console.warn('Smart Match failed to run:', err));
@@ -163,8 +196,10 @@ export default function CreateCommunityPostScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
         '🎉 Posted!',
-        'Your found item is now live on the Community Board. The real owner will be able to claim it.',
-        [{ text: 'View Board', onPress: () => router.back() }]
+        isTrack3
+          ? 'Your item has been saved publicly. It will be discoverable by nearby people once the public feed launches.'
+          : 'Your found item is now live on the Community Board. The real owner will be able to claim it.',
+        [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Could not post item. Please try again.');
@@ -304,11 +339,13 @@ export default function CreateCommunityPostScreen() {
           </View>
         </View>
 
-        {/* ── Location notice ───────────────────────────────────────────────── */}
+        {/* ── Location notice ── */}
         <View style={styles.locationNotice}>
           <Text style={styles.locationNoticeIcon}>📍</Text>
           <Text style={styles.locationNoticeText}>
-            Your current location will be captured automatically when you post, to help the owner narrow down where to look.
+            {isTrack3
+              ? 'Location is required for public posts — it helps nearby people discover this item.'
+              : 'Your current location will be captured automatically when you post, to help the owner narrow down where to look.'}
           </Text>
         </View>
 

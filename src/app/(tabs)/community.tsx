@@ -312,7 +312,7 @@ export default function CommunityScreen() {
             <Text style={{ fontSize: 56, marginBottom: 16 }}>🏛️</Text>
             <Text style={styles.track3Title}>No community linked</Text>
             <Text style={styles.track3Sub}>
-              You signed in without an institution. Find your college or university to access the community board.
+              Post lost &amp; found items publicly — no institution needed. Your posts are saved and the nearby discovery feed is coming soon.
             </Text>
             <TouchableOpacity
               style={styles.track3Btn}
