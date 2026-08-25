@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTabBarClearance } from '../../components/FloatingTabBar';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type PostType = 'found' | 'lost';
@@ -178,6 +179,59 @@ function GroupCard({ group, onPress }: any) {
   );
 }
 
+// ─── Nearby Post Card (Track 3) ──────────────────────────────────────────────
+const CAT_ICONS: Record<string, string> = {
+  Personal: '👤', Electronics: '💻', Bag: '👜', Keys: '🔑',
+  Wallet: '💳', Travel: '✈️', Other: '📦',
+};
+
+function formatDist(m: number): string {
+  return m < 1000 ? `${Math.round(m)} m away` : `${(m / 1000).toFixed(1)} km away`;
+}
+
+type NearbyPost = {
+  id: string; post_type: 'found' | 'lost';
+  title: string; description: string | null; category: string;
+  image_url: string | null; location_label: string | null;
+  latitude: number; longitude: number;
+  distance_m: number; created_at: string; status: string;
+};
+
+function NearbyPostCard({ post }: { post: NearbyPost }) {
+  const router = useRouter();
+  const isLost = post.post_type === 'lost';
+  return (
+    <TouchableOpacity
+      style={styles.nearbyCard}
+      activeOpacity={0.85}
+      onPress={() => router.push({
+        pathname: isLost ? '/lost-post/[id]' : '/item/[id]',
+        params: { id: post.id },
+      } as any)}
+    >
+      {post.image_url ? (
+        <Image source={{ uri: post.image_url }} style={styles.nearbyCardImg} />
+      ) : (
+        <View style={[styles.nearbyCardImgPlaceholder, { backgroundColor: isLost ? '#fff7ed' : '#f0fdf4' }]}>
+          <Text style={{ fontSize: 30 }}>{CAT_ICONS[post.category] ?? '📦'}</Text>
+        </View>
+      )}
+      <View style={styles.nearbyCardBody}>
+        <View style={styles.nearbyCardTop}>
+          <View style={[styles.nearbyBadge, isLost ? styles.nearbyBadgeLost : styles.nearbyBadgeFound]}>
+            <Text style={[styles.nearbyBadgeText, isLost ? styles.nearbyBadgeTextLost : styles.nearbyBadgeTextFound]}>
+              {isLost ? 'LOST' : 'FOUND'}
+            </Text>
+          </View>
+          <Text style={styles.nearbyDist}>{formatDist(post.distance_m)}</Text>
+        </View>
+        <Text style={styles.nearbyCardTitle} numberOfLines={2}>{post.title}</Text>
+        <Text style={styles.nearbyCardMeta}>{post.category} · {timeAgo(post.created_at)}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CommunityScreen() {
   const router = useRouter();
@@ -199,6 +253,12 @@ export default function CommunityScreen() {
   const [membershipStatus, setMembershipStatus] = useState<'active' | 'requested' | 'rejected'>('active');
   // null = not yet checked | true = Track 3 | false = Track 1 or 2
   const [isTrack3, setIsTrack3] = useState<boolean | null>(null);
+  // Nearby feed state (Track 3)
+  const [nearbyPosts, setNearbyPosts] = useState<NearbyPost[]>([]);
+  const [nearbyRadius, setNearbyRadius] = useState(10000);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [nearbyRefreshing, setNearbyRefreshing] = useState(false);
+  const [nearbyLocationError, setNearbyLocationError] = useState<string | null>(null);
 
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   useEffect(() => { if (tabParam === 'groups') setActiveTab('groups'); }, [tabParam]);
@@ -294,6 +354,40 @@ export default function CommunityScreen() {
   };
   const handleReport = () => Alert.alert('Report Submitted', 'Thank you. Our team will review this post.');
 
+  // ── Nearby feed (Track 3) ─────────────────────────────────────────────────
+  const fetchNearby = async (refresh = false) => {
+    if (refresh) setNearbyRefreshing(true); else setNearbyLoading(true);
+    setNearbyLocationError(null);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setNearbyLocationError('Location permission is needed to show nearby posts. Please enable it in your phone settings.');
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { data, error } = await supabase.rpc('get_nearby_posts', {
+        user_lat: loc.coords.latitude,
+        user_lng: loc.coords.longitude,
+        radius_m: nearbyRadius,
+      });
+      if (error) throw error;
+      setNearbyPosts((data as NearbyPost[]) ?? []);
+    } catch (e: any) {
+      setNearbyLocationError('Could not load nearby posts. Please try again.');
+    } finally {
+      setNearbyLoading(false);
+      setNearbyRefreshing(false);
+    }
+  };
+  const handleNearbyRefresh = () => fetchNearby(true);
+
+  // Re-fetch when radius changes or Track 3 is confirmed
+  useEffect(() => {
+    if (!isTrack3) return;
+    fetchNearby();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTrack3, nearbyRadius]);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#6366f1" />
@@ -301,29 +395,68 @@ export default function CommunityScreen() {
       {/* ── Track 3 Empty State — shown instead of whole community UI ── */}
       {isTrack3 === true ? (
         <View style={styles.track3Container}>
+          {/* ── Gradient header + radius picker ── */}
           <LinearGradient
             colors={['#6366f1', '#7c3aed']}
-            style={[styles.track3Header, { paddingTop: insets.top + 20 }]}
+            style={[styles.nearbyHeader, { paddingTop: insets.top + 20 }]}
           >
-            <Text style={styles.track3HeaderLabel}>YOUR COMMUNITY</Text>
-            <Text style={styles.track3HeaderTitle}>Community</Text>
+            <View style={styles.hCircle1} />
+            <View style={styles.hCircle2} />
+            <Text style={styles.nearbyLabel}>NEAR YOU</Text>
+            <Text style={styles.nearbyTitle}>Nearby Board</Text>
+            <Text style={styles.nearbySubLabel}>Public lost &amp; found · {nearbyRadius / 1000}km radius</Text>
+            <View style={styles.radiusPicker}>
+              {[5000, 10000, 25000].map(r => (
+                <TouchableOpacity
+                  key={r}
+                  style={[styles.nearbyRadiusBtn, nearbyRadius === r && styles.nearbyRadiusBtnActive]}
+                  onPress={() => setNearbyRadius(r)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.nearbyRadiusBtnText, nearbyRadius === r && styles.nearbyRadiusBtnTextActive]}>
+                    {r / 1000}km
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </LinearGradient>
-          <View style={styles.track3Body}>
-            <Text style={{ fontSize: 56, marginBottom: 16 }}>🏛️</Text>
-            <Text style={styles.track3Title}>No community linked</Text>
-            <Text style={styles.track3Sub}>
-              Post lost &amp; found items publicly — no institution needed. Your posts are saved and the nearby discovery feed is coming soon.
-            </Text>
-            <TouchableOpacity
-              style={styles.track3Btn}
-              onPress={() => router.push('/join-community' as any)}
-              activeOpacity={0.88}
-            >
-              <LinearGradient colors={['#6366f1', '#7c3aed']} style={styles.track3BtnGrad} start={{x:0,y:0}} end={{x:1,y:0}}>
-                <Text style={styles.track3BtnText}>Find your institution</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+
+          {/* ── Feed / states ── */}
+          {nearbyLoading ? (
+            <View style={styles.center}><ActivityIndicator size="large" color="#6366f1" /></View>
+          ) : nearbyLocationError ? (
+            <View style={styles.track3Body}>
+              <Text style={{ fontSize: 44, marginBottom: 14 }}>📍</Text>
+              <Text style={styles.track3Title}>Location needed</Text>
+              <Text style={styles.track3Sub}>{nearbyLocationError}</Text>
+              <TouchableOpacity style={styles.track3Btn} onPress={() => fetchNearby()} activeOpacity={0.88}>
+                <LinearGradient colors={['#6366f1', '#7c3aed']} style={styles.track3BtnGrad} start={{x:0,y:0}} end={{x:1,y:0}}>
+                  <Text style={styles.track3BtnText}>Try again</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              data={nearbyPosts}
+              keyExtractor={p => `${p.post_type}-${p.id}`}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: tabBarClearance + 16 }}
+              showsVerticalScrollIndicator={false}
+              refreshControl={<RefreshControl refreshing={nearbyRefreshing} onRefresh={handleNearbyRefresh} tintColor="#6366f1" />}
+              renderItem={({ item }) => <NearbyPostCard post={item} />}
+              ListEmptyComponent={
+                <View style={styles.empty}>
+                  <Text style={{ fontSize: 52, marginBottom: 12 }}>📭</Text>
+                  <Text style={styles.emptyTitle}>Nothing nearby yet</Text>
+                  <Text style={styles.emptySub}>No public posts within {nearbyRadius / 1000}km. Tap + to be the first.</Text>
+                </View>
+              }
+              ListFooterComponent={
+                <TouchableOpacity onPress={() => router.push('/join-community' as any)} style={styles.nearbyFooterBtn} activeOpacity={0.7}>
+                  <Text style={styles.nearbyFooterText}>Have an institution? Find your community →</Text>
+                </TouchableOpacity>
+              }
+            />
+          )}
         </View>
       ) : (
         <>
@@ -568,4 +701,42 @@ const styles = StyleSheet.create({
   },
   track3BtnGrad: { paddingVertical: 17, alignItems: 'center', borderRadius: 18 },
   track3BtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+
+  /* ── Nearby feed (Track 3) ── */
+  nearbyHeader: {
+    paddingHorizontal: 20, paddingBottom: 20, overflow: 'hidden', position: 'relative',
+  },
+  nearbyLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  nearbyTitle: { color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: -0.5, marginTop: 2, marginBottom: 2 },
+  nearbySubLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '500', marginBottom: 14 },
+  radiusPicker: { flexDirection: 'row', gap: 8 },
+  nearbyRadiusBtn: {
+    paddingHorizontal: 16, paddingVertical: 7, borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  nearbyRadiusBtnActive: { backgroundColor: '#ffffff' },
+  nearbyRadiusBtnText: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '700' },
+  nearbyRadiusBtnTextActive: { color: '#6366f1' },
+
+  nearbyCard: {
+    flexDirection: 'row', backgroundColor: '#ffffff', borderRadius: 18,
+    marginBottom: 12, overflow: 'hidden',
+    shadowColor: '#6366f1', shadowOpacity: 0.07, shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 }, elevation: 3,
+  },
+  nearbyCardImg: { width: 90, height: 90 },
+  nearbyCardImgPlaceholder: { width: 90, height: 90, alignItems: 'center', justifyContent: 'center' },
+  nearbyCardBody: { flex: 1, padding: 12, justifyContent: 'space-between' },
+  nearbyCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  nearbyBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  nearbyBadgeFound: { backgroundColor: '#dcfce7' },
+  nearbyBadgeLost: { backgroundColor: '#fff7ed' },
+  nearbyBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  nearbyBadgeTextFound: { color: '#15803d' },
+  nearbyBadgeTextLost: { color: '#c2410c' },
+  nearbyDist: { color: '#6366f1', fontSize: 12, fontWeight: '700' },
+  nearbyCardTitle: { color: '#0f172a', fontSize: 14, fontWeight: '700', lineHeight: 20, marginBottom: 4 },
+  nearbyCardMeta: { color: '#94a3b8', fontSize: 12, fontWeight: '500' },
+  nearbyFooterBtn: { alignItems: 'center', paddingVertical: 24 },
+  nearbyFooterText: { color: '#6366f1', fontSize: 13, fontWeight: '700' },
 });
