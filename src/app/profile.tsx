@@ -103,8 +103,12 @@ export default function ProfileScreen() {
 
   const handleSaveName = async () => {
     if (!tempName.trim()) return;
+    if (!dbUser?.id) {
+      Alert.alert('Please wait', 'Your account is still loading. Try again in a moment.');
+      return;
+    }
     setSavingName(true);
-    const { error } = await supabase.from('users').update({ full_name: tempName.trim() }).eq('id', dbUser?.id);
+    const { error } = await supabase.from('users').update({ full_name: tempName.trim() }).eq('id', dbUser.id);
     setSavingName(false);
     if (error) {
       Alert.alert('Error', 'Could not update name.');
