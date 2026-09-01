@@ -21,10 +21,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   initialized: false,
   dbUser: null,
   setSession: async (session) => {
-    let role = 'student';
-    let isAdmin = false;
-    let dbUser = null;
-    
+    // 1. Set session IMMEDIATELY — unblocks navigation right away.
+    //    Role / dbUser will fill in momentarily as a background update.
+    set({ session, user: session?.user || null, initialized: true });
+
+    // 2. Enrich with DB data in the background (non-blocking)
     if (session?.user?.id) {
       try {
         const { data } = await supabase
@@ -32,23 +33,22 @@ export const useAuthStore = create<AuthState>((set) => ({
           .select('id, role, full_name, successful_recoveries, created_at')
           .eq('auth_id', session.user.id)
           .single();
-          
         if (data) {
-          role = data.role;
-          isAdmin = data.role === 'admin';
-          dbUser = { 
-            id: data.id,
-            full_name: data.full_name, 
-            successful_recoveries: data.successful_recoveries, 
-            created_at: data.created_at 
-          };
+          set({
+            role: data.role,
+            isAdmin: data.role === 'admin',
+            dbUser: {
+              id: data.id,
+              full_name: data.full_name,
+              successful_recoveries: data.successful_recoveries,
+              created_at: data.created_at,
+            },
+          });
         }
       } catch (e) {
         console.warn('Failed to fetch role/name:', e);
       }
     }
-    
-    set({ session, user: session?.user || null, role, isAdmin, dbUser, initialized: true });
   },
   signOut: async () => {
     await supabase.auth.signOut();

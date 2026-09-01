@@ -450,11 +450,7 @@ export default function CommunityScreen() {
                   <Text style={styles.emptySub}>No public posts within {nearbyRadius / 1000}km. Tap + to be the first.</Text>
                 </View>
               }
-              ListFooterComponent={
-                <TouchableOpacity onPress={() => router.push('/join-community' as any)} style={styles.nearbyFooterBtn} activeOpacity={0.7}>
-                  <Text style={styles.nearbyFooterText}>Have an institution? Find your community →</Text>
-                </TouchableOpacity>
-              }
+
             />
           )}
         </View>
