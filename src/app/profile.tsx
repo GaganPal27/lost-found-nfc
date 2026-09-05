@@ -39,20 +39,40 @@ export default function ProfileScreen() {
   // Fetch college membership for badge
   useEffect(() => {
     if (!dbUser?.id) return;
-    supabase
-      .from('group_members')
-      .select('membership_status, community_groups!inner(name)')
-      .eq('user_id', dbUser.id)
-      .eq('status', 'active')
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
+    (async () => {
+      // Try full query with membership_status first
+      const { data, error } = await supabase
+        .from('group_members')
+        .select('membership_status, community_groups!inner(name)')
+        .eq('user_id', dbUser.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        setCollegeInfo({
+          name: (data as any).community_groups?.name ?? '',
+          status: (data as any).membership_status ?? 'member',
+        });
+        return;
+      }
+
+      // Fallback: membership_status column may not exist yet — query without it
+      if (error) {
+        console.warn('[profile] college badge error:', error.message);
+        const { data: d2 } = await supabase
+          .from('group_members')
+          .select('community_groups!inner(name)')
+          .eq('user_id', dbUser.id)
+          .limit(1)
+          .maybeSingle();
+        if (d2) {
           setCollegeInfo({
-            name: (data as any).community_groups?.name ?? '',
-            status: (data as any).membership_status ?? 'member',
+            name: (d2 as any).community_groups?.name ?? '',
+            status: 'member',
           });
         }
-      });
+      }
+    })();
   }, [dbUser?.id]);
 
   const handleAvatarUpload = async () => {
