@@ -8,7 +8,7 @@ interface AuthState {
   role: string;
   isAdmin: boolean;
   initialized: boolean;
-  dbUser: { full_name?: string; successful_recoveries?: number; created_at?: string; id?: string } | null;
+  dbUser: { full_name?: string; successful_recoveries?: number; created_at?: string; id?: string; avatar_url?: string } | null;
   setSession: (session: Session | null) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -30,7 +30,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       try {
         const { data } = await supabase
           .from('users')
-          .select('id, role, full_name, successful_recoveries, created_at')
+          .select('id, role, full_name, successful_recoveries, created_at, avatar_url')
           .eq('auth_id', session.user.id)
           .single();
         if (data) {
@@ -42,6 +42,7 @@ export const useAuthStore = create<AuthState>((set) => ({
               full_name: data.full_name,
               successful_recoveries: data.successful_recoveries,
               created_at: data.created_at,
+              avatar_url: data.avatar_url ?? undefined,
             },
           });
         }

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StatusBar, Animated, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StatusBar, Animated, TextInput, Alert, ActivityIndicator, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../stores/authStore';
@@ -27,11 +28,69 @@ export default function ProfileScreen() {
   const [tempName, setTempName] = useState('');
   const [savingName, setSavingName] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [collegeInfo, setCollegeInfo] = useState<{ name: string; status: string } | null>(null);
 
   const fadeIn = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }, []);
+
+  // Fetch college membership for badge
+  useEffect(() => {
+    if (!dbUser?.id) return;
+    supabase
+      .from('group_members')
+      .select('membership_status, community_groups!inner(name)')
+      .eq('user_id', dbUser.id)
+      .eq('status', 'active')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setCollegeInfo({
+            name: (data as any).community_groups?.name ?? '',
+            status: (data as any).membership_status ?? 'member',
+          });
+        }
+      });
+  }, [dbUser?.id]);
+
+  const handleAvatarUpload = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo library access to change your avatar.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.75,
+    });
+    if (result.canceled || !result.assets?.length) return;
+    if (!user?.id || !dbUser?.id) return;
+    setUploadingAvatar(true);
+    try {
+      const uri = result.assets[0].uri;
+      const filePath = `${user.id}/avatar.jpg`;
+      const res = await fetch(uri);
+      const blob = await res.blob();
+      const { error: upErr } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, blob, { contentType: 'image/jpeg', upsert: true });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      const publicUrl = urlData.publicUrl + '?t=' + Date.now();
+      await supabase.from('users').update({ avatar_url: publicUrl }).eq('id', dbUser.id);
+      useAuthStore.setState({
+        dbUser: { ...useAuthStore.getState().dbUser, avatar_url: publicUrl },
+      });
+    } catch (e: any) {
+      Alert.alert('Upload failed', e.message || 'Could not update avatar. Try again.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -98,8 +157,17 @@ export default function ProfileScreen() {
   const progressPct = maxItems === Infinity ? 0 : Math.min((itemsCount / maxItems) * 100, 100);
 
   const displayName = dbUser?.full_name || user?.email?.split('@')[0] || 'User';
-  const initials = displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  const initials = displayName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
   const memberSince = dbUser?.created_at ? new Date(dbUser.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Recently';
+  const collegeBadgeCfg = collegeInfo
+    ? collegeInfo.status === 'active'
+      ? { bg: '#f0fdf4', border: '#86efac', color: '#15803d', icon: '✓', label: 'Verified' }
+      : collegeInfo.status === 'requested'
+      ? { bg: '#fefce8', border: '#fde047', color: '#854d0e', icon: '⏳', label: 'Pending' }
+      : collegeInfo.status === 'rejected'
+      ? { bg: '#fff1f2', border: '#fca5a5', color: '#dc2626', icon: '✕', label: 'Rejected' }
+      : { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: '🏛', label: 'Member' }
+    : null;
 
   const handleSaveName = async () => {
     if (!tempName.trim()) return;
@@ -141,14 +209,29 @@ export default function ProfileScreen() {
               </View>
             )}
             
-            {/* Vibrant Avatar Background */}
-            <LinearGradient
-              colors={['#6366f1', '#7c3aed']}
-              start={{x:0, y:0}} end={{x:1, y:1}}
-              className="w-24 h-24 rounded-full items-center justify-center mb-4 shadow-sm"
-            >
-              <Text className="text-4xl text-white font-black">{initials}</Text>
-            </LinearGradient>
+            {/* Avatar — tap to change photo */}
+            <TouchableOpacity onPress={handleAvatarUpload} activeOpacity={0.85} style={{ position: 'relative', marginBottom: 16 }}>
+              {dbUser?.avatar_url ? (
+                <Image
+                  source={{ uri: dbUser.avatar_url }}
+                  style={{ width: 96, height: 96, borderRadius: 48 }}
+                />
+              ) : (
+                <LinearGradient
+                  colors={['#6366f1', '#7c3aed']}
+                  start={{x:0, y:0}} end={{x:1, y:1}}
+                  style={{ width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Text style={{ fontSize: 36, color: '#fff', fontWeight: '900' }}>{initials}</Text>
+                </LinearGradient>
+              )}
+              <View style={{ position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: '#6366f1', alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: '#fff' }}>
+                {uploadingAvatar
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={{ fontSize: 12 }}>📷</Text>
+                }
+              </View>
+            </TouchableOpacity>
 
             {editingName ? (
               <View className="w-full flex-row items-center border-b border-slate-300 pb-1 mb-2">
@@ -181,6 +264,15 @@ export default function ProfileScreen() {
               <View className={`w-2 h-2 rounded-full mr-2 ${tierConfig.dot}`} />
               <Text className={`font-bold text-xs tracking-widest uppercase ${tierConfig.text}`}>{tierConfig.label} PLAN</Text>
             </View>
+
+            {/* College / community badge */}
+            {collegeBadgeCfg && collegeInfo && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, backgroundColor: collegeBadgeCfg.bg, borderWidth: 1, borderColor: collegeBadgeCfg.border, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 }}>
+                <Text style={{ fontSize: 12, color: collegeBadgeCfg.color, fontWeight: '800', marginRight: 4 }}>{collegeBadgeCfg.icon}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: collegeBadgeCfg.color, maxWidth: 180 }} numberOfLines={1}>{collegeInfo.name}</Text>
+                <Text style={{ fontSize: 11, color: collegeBadgeCfg.color, marginLeft: 4 }}>· {collegeBadgeCfg.label}</Text>
+              </View>
+            )}
           </View>
           
           {/* Stats */}
