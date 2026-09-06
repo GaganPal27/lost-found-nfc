@@ -310,6 +310,9 @@ export default function RegistrationScreen() {
                   <Text style={{ color: '#92400e', fontSize: 12, fontWeight: '600', flex: 1, lineHeight: 18 }}>{emailDomainWarning}</Text>
                 </View>
               )}
+              <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '500', marginTop: 6, marginLeft: 4 }}>
+                📧 A confirmation link will be sent — use a real email you can access.
+              </Text>
             </View>
 
 

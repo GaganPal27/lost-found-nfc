@@ -264,7 +264,7 @@ export default function AdminDashboard() {
   const [rpcError, setRpcError] = useState(false);
 
   useEffect(() => {
-    if (!isAdmin) { Alert.alert('Access Denied', 'Admins only.'); router.replace('/'); return; }
+    if (!isAdmin) { router.replace('/'); return; }
     load();
   }, [isAdmin]);
 

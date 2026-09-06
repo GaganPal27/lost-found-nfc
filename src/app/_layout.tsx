@@ -268,7 +268,7 @@ function RootLayout() {
     }
   }, [tier, subInitialized]);
 
-  const publicRoutes = ['login', 'registration', 'forgot-password', 'item', 'terms-of-service', 'finder-connect', 'select-college'];
+  const publicRoutes = ['login', 'registration', 'forgot-password', 'item', 'terms-of-service', 'privacy-policy', 'finder-connect', 'select-college'];
   const inAuthScreen = publicRoutes.slice(0, 3).includes(segments[0] as string);
   const inOnboarding = segments[0] === 'onboarding';
   const inSelectCollege = segments[0] === 'select-college';
@@ -310,6 +310,7 @@ function RootLayout() {
   }, [session, authInitialized, subInitialized, segments]);
 
   const hideTabBarPrefixes = [
+    '/lost-post',     // detail screen has CTA button at bottom — tab bar overlaps it
     '/group',
     '/post',
     '/create-lost-post',

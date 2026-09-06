@@ -37,7 +37,7 @@ export default function LostPostDetailScreen() {
       if (!id) { setNotFound(true); setLoading(false); return; }
       const { data, error } = await supabase
         .from('lost_item_posts')
-        .select('*, users(id, full_name, successful_recoveries, auth_id)')
+        .select('*, users(id, full_name, successful_recoveries)')
         .eq('id', id)
         .single();
 
@@ -59,9 +59,15 @@ export default function LostPostDetailScreen() {
     }
     if (!post) return;
 
-    // Guard: don't contact yourself
-    const posterAuthId: string = post.users?.auth_id;
-    if (posterAuthId && posterAuthId === user.id) {
+    // Fetch the poster's auth.uid via RPC (RLS blocks reading auth_id directly from users join)
+    const { data: posterAuthId } = await supabase.rpc('get_user_auth_id', { profile_id: post.poster_id });
+    if (!posterAuthId) {
+      Alert.alert('Error', 'Could not reach the item owner. Please try again later.');
+      return;
+    }
+
+    // Guard: don’t contact yourself
+    if (posterAuthId === user.id) {
       Alert.alert('This is your post', 'You cannot contact yourself.');
       return;
     }
