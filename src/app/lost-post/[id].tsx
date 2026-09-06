@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuthStore } from '../../stores/authStore';
+import * as Haptics from 'expo-haptics';
 
 const STATUS_COLORS: Record<string, { bg: string; dot: string; text: string; label: string }> = {
   searching: { bg: '#FEF3C7', dot: '#F59E0B', text: '#D97706', label: 'SEARCHING' },
@@ -23,16 +25,19 @@ export default function LostPostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user, dbUser } = useAuthStore();
+
   const [post, setPost] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [contacting, setContacting] = useState(false);
 
   useEffect(() => {
     async function fetchPost() {
       if (!id) { setNotFound(true); setLoading(false); return; }
       const { data, error } = await supabase
         .from('lost_item_posts')
-        .select('*, users(full_name, successful_recoveries)')
+        .select('*, users(id, full_name, successful_recoveries, auth_id)')
         .eq('id', id)
         .single();
 
@@ -45,6 +50,81 @@ export default function LostPostDetailScreen() {
     }
     fetchPost();
   }, [id]);
+
+  // "I Found This" — creates or finds a private conversation with the poster
+  const handleContactOwner = async () => {
+    if (!user?.id) {
+      Alert.alert('Sign In Required', 'Please log in to contact the item owner.');
+      return;
+    }
+    if (!post) return;
+
+    // Guard: don't contact yourself
+    const posterAuthId: string = post.users?.auth_id;
+    if (posterAuthId && posterAuthId === user.id) {
+      Alert.alert('This is your post', 'You cannot contact yourself.');
+      return;
+    }
+
+    setContacting(true);
+    try {
+      // 1. Check if a conversation for this lost post + this finder already exists
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('lost_post_id', id)
+        .eq('finder_user_id', user.id)
+        .maybeSingle();
+
+      if (existing?.id) {
+        router.push({ pathname: '/conversation/[id]', params: { id: existing.id } } as any);
+        return;
+      }
+
+      // 2. Create a new conversation
+      const finderName = dbUser?.full_name ?? user.email?.split('@')[0] ?? 'Finder';
+      const { data: conv, error: convErr } = await supabase
+        .from('conversations')
+        .insert({
+          owner_id:       posterAuthId,  // poster's auth.uid — they can read the conversation
+          finder_user_id: user.id,       // finder's auth.uid
+          finder_name:    finderName,
+          lost_post_id:   id,
+        })
+        .select('id')
+        .single();
+
+      if (convErr || !conv) throw convErr ?? new Error('Could not create conversation.');
+
+      // 3. Auto-send an opening message so the poster gets context
+      await supabase.from('messages').insert({
+        conversation_id: conv.id,
+        sender_id:       user.id,
+        sender_name:     finderName,
+        body: `Hi! I think I found your "${post.title}". Let's connect to arrange the return.`,
+      });
+
+      // 4. Notify the poster (non-fatal)
+      try {
+        await supabase.rpc('create_item_notification', {
+          p_owner_id: posterAuthId,
+          p_type:     'message',
+          p_message:  `${finderName} says they found your "${post.title}"!`,
+          p_metadata: { conversation_id: conv.id, lost_post_id: id },
+        });
+        await supabase.functions.invoke('send-push-notification', {
+          body: { owner_id: posterAuthId, item_name: post.title, finder_name: finderName },
+        });
+      } catch (_) {}
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.push({ pathname: '/conversation/[id]', params: { id: conv.id } } as any);
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Could not start chat. Please try again.');
+    } finally {
+      setContacting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -68,6 +148,8 @@ export default function LostPostDetailScreen() {
   }
 
   const s = STATUS_COLORS[post.status] || STATUS_COLORS.searching;
+  const isMyPost = dbUser?.id === post.poster_id;
+  const isStillSearching = post.status === 'searching';
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -118,22 +200,43 @@ export default function LostPostDetailScreen() {
           </View>
         ) : null}
 
-        {/* CTA — If still searching, prompt finder */}
-        {post.status === 'searching' && (
-          <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.cta}>
-            <Text style={styles.ctaEmoji}>👋</Text>
-            <Text style={styles.ctaTitle}>Did you find this item?</Text>
-            <Text style={styles.ctaSub}>
-              If you found something matching this description, please reply on the Community Board so the owner can be reunited with it!
-            </Text>
-            <TouchableOpacity
-              style={styles.ctaBtn}
-              onPress={() => router.replace('/(tabs)/community')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.ctaBtnText}>Go to Community Board →</Text>
-            </TouchableOpacity>
-          </LinearGradient>
+        {/* CTA */}
+        {isStillSearching && !isMyPost && (
+          <TouchableOpacity
+            style={[styles.ctaBtn, contacting && { opacity: 0.6 }]}
+            onPress={handleContactOwner}
+            disabled={contacting}
+            activeOpacity={0.85}
+          >
+            <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.ctaGrad}>
+              {contacting ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <>
+                  <Text style={styles.ctaEmoji}>👋</Text>
+                  <Text style={styles.ctaTitle}>I Found This Item</Text>
+                  <Text style={styles.ctaSub}>
+                    Tap to send a private message to the owner and arrange the return.
+                  </Text>
+                  <View style={styles.ctaInnerBtn}>
+                    <Text style={styles.ctaInnerBtnText}>Message the Owner →</Text>
+                  </View>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+
+        {isMyPost && isStillSearching && (
+          <View style={styles.ownerNote}>
+            <Text style={styles.ownerNoteText}>📌 This is your post. Finders will be able to message you here.</Text>
+          </View>
+        )}
+
+        {!isStillSearching && (
+          <View style={[styles.ownerNote, { backgroundColor: '#dcfce7', borderColor: '#86efac' }]}>
+            <Text style={[styles.ownerNoteText, { color: '#15803d' }]}>✓ This item has been resolved.</Text>
+          </View>
         )}
 
         <View style={{ height: 40 }} />
@@ -178,12 +281,20 @@ const styles = StyleSheet.create({
   descCard: { backgroundColor: '#fff', borderRadius: 20, padding: 18, marginBottom: 20, borderWidth: 1, borderColor: '#f1f5f9' },
   descLabel: { fontSize: 11, color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   descText: { fontSize: 15, color: '#334155', lineHeight: 22, fontWeight: '500' },
-  cta: { borderRadius: 24, padding: 24, alignItems: 'center', marginBottom: 16 },
+
+  // CTA button
+  ctaBtn: { borderRadius: 24, overflow: 'hidden', marginBottom: 16, shadowColor: '#6366f1', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  ctaGrad: { borderRadius: 24, padding: 24, alignItems: 'center' },
   ctaEmoji: { fontSize: 36, marginBottom: 10 },
   ctaTitle: { fontSize: 18, fontWeight: '900', color: '#fff', marginBottom: 8 },
   ctaSub: { fontSize: 13, color: 'rgba(255,255,255,0.85)', textAlign: 'center', lineHeight: 20, marginBottom: 20 },
-  ctaBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.5)', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 12 },
-  ctaBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  ctaInnerBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.5)', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 12 },
+  ctaInnerBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+
+  // Owner note
+  ownerNote: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 16, padding: 14, marginBottom: 16 },
+  ownerNoteText: { color: '#1d4ed8', fontSize: 13, fontWeight: '600', textAlign: 'center' },
+
   notFoundTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
   notFoundSub: { fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 24 },
   backBtnLarge: { backgroundColor: '#6366f1', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16 },

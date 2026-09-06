@@ -15,7 +15,8 @@ type Message = { id: string; sender_name: string; sender_id: string | null; body
 type Conversation = {
   id: string; item_id: string | null; owner_id: string; finder_name: string | null; finder_phone: string | null;
   scan_location: string | null; scan_lat: number | null; scan_lng: number | null; resolved: boolean;
-  community_item_id?: string | null; items?: { item_name: string } | null; communityItemTitle?: string | null;
+  community_item_id?: string | null; lost_post_id?: string | null;
+  items?: { item_name: string } | null; communityItemTitle?: string | null; lostPostTitle?: string | null;
 };
 
 export default function ConversationScreen() {
@@ -54,11 +55,16 @@ export default function ConversationScreen() {
     if (error) return;
     if (data) {
       let communityItemTitle: string | null = null;
+      let lostPostTitle: string | null = null;
       if (data.community_item_id) {
         const { data: ci } = await supabase.from('community_items').select('title').eq('id', data.community_item_id).single();
         communityItemTitle = ci?.title ?? null;
       }
-      setConv({ ...data, communityItemTitle } as Conversation);
+      if (data.lost_post_id) {
+        const { data: lp } = await supabase.from('lost_item_posts').select('title').eq('id', data.lost_post_id).single();
+        lostPostTitle = lp?.title ?? null;
+      }
+      setConv({ ...data, communityItemTitle, lostPostTitle } as Conversation);
     }
   };
 
@@ -86,12 +92,13 @@ export default function ConversationScreen() {
   };
 
   const handleResolve = async () => {
-    Alert.alert('Mark as Resolved?', 'This will close the conversation and mark the item as found.', [
+    Alert.alert('Mark as Resolved?', 'This will close the conversation and mark the item as returned.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Resolve', onPress: async () => {
           await supabase.from('conversations').update({ resolved: true }).eq('id', id);
           if (conv?.item_id) await supabase.from('items').update({ status: 'found' }).eq('id', conv.item_id);
           else if (conv?.community_item_id) await supabase.from('community_items').update({ status: 'closed' }).eq('id', conv.community_item_id);
+          else if (conv?.lost_post_id) await supabase.from('lost_item_posts').update({ status: 'found' }).eq('id', conv.lost_post_id);
           setConv((prev) => prev ? { ...prev, resolved: true } : prev);
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -100,7 +107,7 @@ export default function ConversationScreen() {
   };
 
   const isOwner = user?.id === conv?.owner_id;
-  const itemName = conv?.communityItemTitle ?? conv?.items?.item_name ?? 'Chat';
+  const itemName = conv?.lostPostTitle ?? conv?.communityItemTitle ?? conv?.items?.item_name ?? 'Chat';
   const formatTime = (ts: string) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   const renderMessage = ({ item }: { item: Message }) => {

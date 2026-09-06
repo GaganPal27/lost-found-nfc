@@ -205,7 +205,7 @@ function NearbyPostCard({ post }: { post: NearbyPost }) {
       style={styles.nearbyCard}
       activeOpacity={0.85}
       onPress={() => router.push({
-        pathname: isLost ? '/lost-post/[id]' : '/item/[id]',
+        pathname: isLost ? '/lost-post/[id]' : '/post/[id]',
         params: { id: post.id },
       } as any)}
     >
