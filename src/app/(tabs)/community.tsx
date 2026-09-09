@@ -237,7 +237,7 @@ export default function CommunityScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
-  const { dbUser } = useAuthStore();
+  const { user, dbUser } = useAuthStore();
   const dbUserId = dbUser?.id ?? null;
 
   const [activeTab, setActiveTab] = useState<Tab>('feed');
