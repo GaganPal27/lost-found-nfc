@@ -341,3 +341,6 @@ const styles = StyleSheet.create({
     textAlign: 'center', lineHeight: 20,
   },
 });
+
+// Default export so Expo Router treats /messages-list as a valid route
+export default MessagesList;

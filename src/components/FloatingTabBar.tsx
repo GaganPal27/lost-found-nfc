@@ -7,8 +7,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../stores/authStore';
 
 export const TAB_ROUTES = [
   { name: 'community', iconName: 'home'           as const, label: 'Home' },
@@ -33,52 +31,14 @@ interface FloatingTabBarProps {
 export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabBarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuthStore();
   const [showPostModal, setShowPostModal] = useState(false);
   const [unreadMessages, setUnreadMessages]     = useState(0);
-  const [unreadNotifs,   setUnreadNotifs]       = useState(0);
 
   const bottomPad = Math.max(insets.bottom + 12, 24);
-
-  // ── Badge counts ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!user?.id) return;
-
-    // Count conversations with at least one message, where the current user
-    // hasn't dismissed them (simple proxy: total active conversations)
-    const fetchBadges = async () => {
-      const [convRes, notifRes] = await Promise.all([
-        supabase
-          .from('conversations')
-          .select('id', { count: 'exact', head: true })
-          .or(`owner_id.eq.${user.id},finder_user_id.eq.${user.id}`)
-          .eq('resolved', false),
-        supabase
-          .from('notifications')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('is_read', false),
-      ]);
-      setUnreadMessages(convRes.count ?? 0);
-      setUnreadNotifs(notifRes.count ?? 0);
-    };
-
-    fetchBadges();
-
-    // Realtime updates
-    const ch = supabase
-      .channel('tab_badges')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, fetchBadges)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, fetchBadges)
-      .subscribe();
-
-    return () => { supabase.removeChannel(ch); };
-  }, [user?.id]);
 
   // Clear messages badge when user opens messages tab
   useEffect(() => {
     if (activeRoute === 'messages') setUnreadMessages(0);
-    if (activeRoute === 'notifications') setUnreadNotifs(0);
   }, [activeRoute]);
 
   return (
