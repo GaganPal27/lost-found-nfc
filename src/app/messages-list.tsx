@@ -19,12 +19,14 @@ type ConversationRow = {
   resolved: boolean;
   created_at: string;
   community_item_id?: string | null;
+  lost_post_id?: string | null;
   items?: { item_name: string; image_url?: string } | null;
   community_items?: { title: string; image_url?: string } | null;
+  lost_posts?: { title: string } | null;
   last_message?: string;
 };
 
-export function MessagesList() {
+export function MessagesList({ bottomPadding = 100 }: { bottomPadding?: number }) {
   const { user } = useAuthStore();
   const router = useRouter();
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
@@ -91,16 +93,20 @@ export function MessagesList() {
 
       const withMessages = await Promise.all(
         visible.map(async (conv) => {
-          const [msgRes, ciRes] = await Promise.all([
+          const [msgRes, ciRes, lpRes] = await Promise.all([
             supabase.from('messages').select('body').eq('conversation_id', conv.id).order('created_at', { ascending: false }).limit(1),
             conv.community_item_id
               ? supabase.from('community_items').select('title, image_url').eq('id', conv.community_item_id).single()
+              : Promise.resolve({ data: null }),
+            (conv as any).lost_post_id
+              ? supabase.from('lost_item_posts').select('title').eq('id', (conv as any).lost_post_id).single()
               : Promise.resolve({ data: null }),
           ]);
           return {
             ...conv,
             last_message: msgRes.data?.[0]?.body ?? null,
             community_items: ciRes.data ?? null,
+            lost_posts: lpRes.data ?? null,
           };
         })
       );
@@ -164,49 +170,60 @@ export function MessagesList() {
   };
 
   const renderItem = ({ item }: { item: ConversationRow }) => {
-    const itemName = item.community_items?.title ?? item.items?.item_name ?? 'Unknown Item';
     const isFinder = item.finder_user_id === user?.id;
 
-    let subText = '';
-    if (item.community_item_id) {
-      subText = isFinder ? 'Found Item Claim Chat' : 'Ownership Claim Chat';
+    // Determine display name and subtext based on conversation type
+    let itemName = 'Chat';
+    let subText  = '';
+    let emoji    = '🔍';
+
+    if ((item as any).lost_posts?.title) {
+      // Lost-item contact conversation (Sprint I: "I Found This")
+      itemName = (item as any).lost_posts.title;
+      subText  = isFinder ? 'You contacted the owner' : 'Someone says they found this';
+      emoji    = '👋';
+    } else if (item.community_items?.title) {
+      // Community found-item claim
+      itemName = item.community_items.title;
+      subText  = isFinder ? 'Found Item Claim Chat' : 'Ownership Claim Chat';
+      emoji    = '🙋';
+    } else if (item.items?.item_name) {
+      // NFC item scan conversation
+      itemName = item.items.item_name;
+      subText  = isFinder ? 'You scanned this' : (item.finder_name ? `Found by ${item.finder_name}` : 'Anonymous finder');
+      emoji    = '📡';
     } else {
-      subText = isFinder ? 'You scanned this' : (item.finder_name ? `Found by ${item.finder_name}` : 'Anonymous finder');
+      subText = isFinder ? 'You initiated contact' : 'Incoming message';
+      emoji   = '💬';
     }
 
     return (
       <TouchableOpacity
-        className={`bg-white border rounded-2xl p-4 mb-3 shadow-sm ${item.resolved ? 'border-green-200 opacity-70' : 'border-slate-200'}`}
+        style={[
+          styles.convCard,
+          item.resolved ? styles.convCardResolved : styles.convCardActive,
+        ]}
         onPress={() => router.push(`/conversation/${item.id}`)}
         activeOpacity={0.8}
       >
-        <View className="flex-row items-start">
+        <View style={styles.convRow}>
           {/* Avatar */}
-          <View className="w-12 h-12 bg-primary/10 border border-primary/20 rounded-full items-center justify-center mr-4 shrink-0">
-            <Text className="text-xl">
-              {item.resolved ? '✅' : item.community_item_id ? '🙋' : '🔍'}
-            </Text>
+          <View style={[styles.avatar, item.resolved && styles.avatarResolved]}>
+            <Text style={styles.avatarEmoji}>{item.resolved ? '✅' : emoji}</Text>
           </View>
 
           {/* Content */}
-          <View className="flex-1">
-            <View className="flex-row justify-between items-center mb-0.5">
-              <Text className="text-slate-900 font-bold text-base flex-1" numberOfLines={1}>
-                {itemName}
-              </Text>
-              <Text className="text-slate-500 text-xs ml-2">{formatDate(item.created_at)}</Text>
+          <View style={styles.convContent}>
+            <View style={styles.convTopRow}>
+              <Text style={styles.convTitle} numberOfLines={1}>{itemName}</Text>
+              <Text style={styles.convTime}>{formatDate(item.created_at)}</Text>
             </View>
-
-            <Text className="text-slate-600 text-sm mb-1 font-medium">
-              {subText}
-            </Text>
-
+            <Text style={styles.convSub}>{subText}</Text>
             {item.scan_location && (
-              <Text className="text-slate-500 text-xs mb-1">📍 {item.scan_location}</Text>
+              <Text style={styles.convLocation}>📍 {item.scan_location}</Text>
             )}
-
             {item.last_message && (
-              <Text className="text-slate-500 text-sm italic" numberOfLines={1}>
+              <Text style={styles.convPreview} numberOfLines={1}>
                 "{item.last_message}"
               </Text>
             )}
@@ -214,8 +231,8 @@ export function MessagesList() {
         </View>
 
         {item.resolved && (
-          <View className="mt-2 bg-green-100 border border-green-200 rounded-xl px-3 py-1 self-start">
-            <Text className="text-green-700 text-xs font-bold">Resolved</Text>
+          <View style={styles.resolvedPill}>
+            <Text style={styles.resolvedPillText}>✓ Resolved</Text>
           </View>
         )}
       </TouchableOpacity>
@@ -223,14 +240,13 @@ export function MessagesList() {
   };
 
   return (
-    <View className="flex-1 bg-slate-50">
+    <View style={styles.listRoot}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Header removed for unified wrapper */}
-
       {loading && conversations.length === 0 ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#e11d48" size="large" />
+        <View style={styles.loadingBox}>
+          <Text style={{ fontSize: 40, marginBottom: 16 }}>💬</Text>
+          <Text style={{ color: '#6366f1', fontWeight: '700' }}>Loading messages…</Text>
         </View>
       ) : (
         <Animated.View style={{ opacity: fadeIn, flex: 1 }}>
@@ -238,38 +254,29 @@ export function MessagesList() {
             data={conversations}
             keyExtractor={(c) => c.id}
             renderItem={renderItem}
-            contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+            contentContainerStyle={{ padding: 16, paddingBottom: bottomPadding }}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#e11d48" colors={['#e11d48']} />
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366f1" colors={['#6366f1']} />
             }
             ListHeaderComponent={
               conversations.length > 0 ? (
                 <TouchableOpacity
                   onPress={clearAll}
                   activeOpacity={0.7}
-                  style={{
-                    alignSelf: 'flex-end',
-                    marginBottom: 12,
-                    paddingHorizontal: 14,
-                    paddingVertical: 7,
-                    backgroundColor: '#fee2e2',
-                    borderRadius: 20,
-                    borderWidth: 1,
-                    borderColor: '#fecaca',
-                  }}
+                  style={styles.clearBtn}
                 >
-                  <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 13 }}>🗑 Clear All</Text>
+                  <Text style={styles.clearBtnText}>🗑 Clear All</Text>
                 </TouchableOpacity>
               ) : null
             }
             ListEmptyComponent={
-              <View className="items-center justify-center py-28">
-                <View className="w-24 h-24 bg-white border border-slate-200 rounded-full items-center justify-center mb-6 shadow-sm">
-                  <Text className="text-4xl">🤝</Text>
+              <View style={styles.emptyBox}>
+                <View style={styles.emptyIcon}>
+                  <Text style={{ fontSize: 40 }}>🤝</Text>
                 </View>
-                <Text className="text-slate-900 text-xl font-bold mb-2">No Connections Yet</Text>
-                <Text className="text-slate-500 text-center px-10 leading-6 font-medium">
-                  When someone finds one of your items and scans its tag, they'll appear here.
+                <Text style={styles.emptyTitle}>No Messages Yet</Text>
+                <Text style={styles.emptySub}>
+                  When someone contacts you about a lost item or you claim a found item, your conversations appear here.
                 </Text>
               </View>
             }
@@ -279,3 +286,58 @@ export function MessagesList() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  listRoot: { flex: 1, backgroundColor: '#f8faff' },
+  loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  convCard: {
+    backgroundColor: '#ffffff', borderRadius: 20, padding: 16, marginBottom: 12,
+    borderWidth: 1, shadowColor: '#6366f1', shadowOpacity: 0.06, shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 }, elevation: 3,
+  },
+  convCardActive: { borderColor: '#e2e8f0' },
+  convCardResolved: { borderColor: '#bbf7d0', opacity: 0.8 },
+  convRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  avatar: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: '#ede9fe', borderWidth: 1, borderColor: '#c4b5fd',
+    alignItems: 'center', justifyContent: 'center', marginRight: 14,
+  },
+  avatarResolved: { backgroundColor: '#dcfce7', borderColor: '#86efac' },
+  avatarEmoji: { fontSize: 22 },
+  convContent: { flex: 1 },
+  convTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
+  convTitle: { color: '#0f172a', fontWeight: '800', fontSize: 15, flex: 1 },
+  convTime: { color: '#94a3b8', fontSize: 11, fontWeight: '600', marginLeft: 8 },
+  convSub: { color: '#6366f1', fontSize: 12, fontWeight: '700', marginBottom: 4 },
+  convLocation: { color: '#64748b', fontSize: 11, marginBottom: 4 },
+  convPreview: { color: '#64748b', fontSize: 13, fontStyle: 'italic' },
+  resolvedPill: {
+    marginTop: 10, alignSelf: 'flex-start',
+    backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac',
+    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4,
+  },
+  resolvedPillText: { color: '#15803d', fontSize: 11, fontWeight: '800' },
+
+  clearBtn: {
+    alignSelf: 'flex-end', marginBottom: 12,
+    paddingHorizontal: 14, paddingVertical: 7,
+    backgroundColor: '#fee2e2', borderRadius: 20,
+    borderWidth: 1, borderColor: '#fecaca',
+  },
+  clearBtnText: { color: '#dc2626', fontWeight: '700', fontSize: 13 },
+
+  emptyBox: { paddingTop: 60, alignItems: 'center', paddingHorizontal: 32 },
+  emptyIcon: {
+    width: 88, height: 88, backgroundColor: '#ffffff',
+    borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 44,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 20,
+    shadowColor: '#6366f1', shadowOpacity: 0.08, shadowRadius: 12, elevation: 3,
+  },
+  emptyTitle: { color: '#0f172a', fontSize: 20, fontWeight: '800', marginBottom: 10 },
+  emptySub: {
+    color: '#64748b', fontSize: 13, fontWeight: '500',
+    textAlign: 'center', lineHeight: 20,
+  },
+});

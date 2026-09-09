@@ -10,7 +10,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export function NotificationsList() {
+export function NotificationsList({ bottomPadding = 40 }: { bottomPadding?: number }) {
   const { user, dbUser } = useAuthStore();
   const router = useRouter();
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -159,7 +159,7 @@ export function NotificationsList() {
               </TouchableOpacity>
             ) : null
           }
-          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: bottomPadding }}
           ListEmptyComponent={
             <View className="items-center justify-center py-28">
               <View className="w-24 h-24 bg-white border border-slate-200 shadow-sm rounded-full items-center justify-center mb-6">

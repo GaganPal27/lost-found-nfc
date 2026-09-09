@@ -7,23 +7,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/authStore';
 
 export const TAB_ROUTES = [
-  { name: 'community', iconName: 'home' as const,   label: 'Home' },
-  { name: 'scan',      iconName: 'maximize' as const, label: 'Scan' },
-  { name: 'my-items',  iconName: 'tag' as const,    label: 'Tags' },
+  { name: 'community',     iconName: 'home'           as const, label: 'Home' },
+  { name: 'messages',      iconName: 'message-circle' as const, label: 'Messages' },
+  { name: 'notifications', iconName: 'bell'           as const, label: 'Alerts' },
+  { name: 'my-items',      iconName: 'tag'            as const, label: 'Tags' },
 ];
 
 // Shared helper so any scroll screen can compute exactly how much
 // paddingBottom it needs to clear the floating tab bar + system nav pill.
-// 160px is the safe total: ~56px bar content + 24px padding + 80px safety margin
-// for gesture nav pill on any Android device, even if insets report 0.
 export function useTabBarClearance() {
   const insets = useSafeAreaInsets();
-  // Use actual insets when available (usually 28–44px on modern Android),
-  // or fall back to 80px safety margin so the bar is always fully cleared.
   const gestureNavHeight = Math.max(insets.bottom, 80);
-  return gestureNavHeight + 80; // 80px for bar content + breathing room
+  return gestureNavHeight + 80;
 }
 
 interface FloatingTabBarProps {
@@ -34,18 +33,59 @@ interface FloatingTabBarProps {
 export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabBarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuthStore();
   const [showPostModal, setShowPostModal] = useState(false);
+  const [unreadMessages, setUnreadMessages]     = useState(0);
+  const [unreadNotifs,   setUnreadNotifs]       = useState(0);
 
-  // Aggressive safe margin: never let the bar sit closer than 24px to the
-  // bottom edge, and always clear the Android gesture/nav pill by 12px on
-  // top of whatever insets.bottom reports.
   const bottomPad = Math.max(insets.bottom + 12, 24);
-  const navHeight = bottomPad + 56;
+
+  // ── Badge counts ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // Count conversations with at least one message, where the current user
+    // hasn't dismissed them (simple proxy: total active conversations)
+    const fetchBadges = async () => {
+      const [convRes, notifRes] = await Promise.all([
+        supabase
+          .from('conversations')
+          .select('id', { count: 'exact', head: true })
+          .or(`owner_id.eq.${user.id},finder_user_id.eq.${user.id}`)
+          .eq('resolved', false),
+        supabase
+          .from('notifications')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false),
+      ]);
+      setUnreadMessages(convRes.count ?? 0);
+      setUnreadNotifs(notifRes.count ?? 0);
+    };
+
+    fetchBadges();
+
+    // Realtime updates
+    const ch = supabase
+      .channel('tab_badges')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, fetchBadges)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, fetchBadges)
+      .subscribe();
+
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]);
+
+  // Clear messages badge when user opens messages tab
+  useEffect(() => {
+    if (activeRoute === 'messages') setUnreadMessages(0);
+    if (activeRoute === 'notifications') setUnreadNotifs(0);
+  }, [activeRoute]);
 
   return (
     <>
-      {/* ── Bottom Nav Bar ─────────────────────────────────────────────── */}
+      {/* ── Bottom Nav Bar ─────────────────────────────────────────────────── */}
       <View style={[styles.bar, { paddingBottom: bottomPad }]}>
+
         {/* Home */}
         <TabItem
           iconName="home"
@@ -54,15 +94,16 @@ export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabB
           onPress={() => onTabPress('community')}
         />
 
-        {/* Scan */}
+        {/* Messages */}
         <TabItem
-          iconName="maximize"
-          label="Scan"
-          isActive={activeRoute === 'scan'}
-          onPress={() => onTabPress('scan')}
+          iconName="message-circle"
+          label="Messages"
+          isActive={activeRoute === 'messages'}
+          badge={unreadMessages}
+          onPress={() => onTabPress('messages')}
         />
 
-        {/* + Post (center, same height) */}
+        {/* + Post (center) */}
         <TouchableOpacity
           style={styles.postBtn}
           onPress={() => setShowPostModal(true)}
@@ -73,6 +114,15 @@ export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabB
           </LinearGradient>
         </TouchableOpacity>
 
+        {/* Notifications */}
+        <TabItem
+          iconName="bell"
+          label="Alerts"
+          isActive={activeRoute === 'notifications'}
+          badge={unreadNotifs}
+          onPress={() => onTabPress('notifications')}
+        />
+
         {/* Tags */}
         <TabItem
           iconName="tag"
@@ -82,7 +132,7 @@ export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabB
         />
       </View>
 
-      {/* ── Post Type Modal ─────────────────────────────────────────────── */}
+      {/* ── Post Type Modal ────────────────────────────────────────────────── */}
       <Modal
         visible={showPostModal}
         transparent
@@ -91,11 +141,10 @@ export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabB
       >
         <Pressable style={styles.modalOverlay} onPress={() => setShowPostModal(false)}>
           <View style={styles.sheetContainer} onStartShouldSetResponder={() => true}>
-            {/* Handle bar */}
             <View style={styles.handle} />
 
-            <Text style={styles.sheetTitle}>What do you want to post?</Text>
-            <Text style={styles.sheetSubtitle}>Help the community find what was lost</Text>
+            <Text style={styles.sheetTitle}>What do you want to do?</Text>
+            <Text style={styles.sheetSubtitle}>Post to the community or scan an NFC tag</Text>
 
             {/* Found */}
             <TouchableOpacity
@@ -129,6 +178,22 @@ export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabB
               <Feather name="chevron-right" size={18} color="#94a3b8" />
             </TouchableOpacity>
 
+            {/* Scan NFC */}
+            <TouchableOpacity
+              style={[styles.sheetOption, { borderColor: '#c7d2fe' }]}
+              onPress={() => { setShowPostModal(false); router.push('/(tabs)/scan'); }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.sheetOptionIcon, { backgroundColor: '#e0e7ff' }]}>
+                <Text style={{ fontSize: 26 }}>📡</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetOptionTitle}>Scan NFC Tag</Text>
+                <Text style={styles.sheetOptionSub}>Link or read an NFC tag on your item</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color="#94a3b8" />
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowPostModal(false)} activeOpacity={0.7}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
@@ -140,11 +205,12 @@ export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabB
 }
 
 function TabItem({
-  iconName, label, isActive, onPress,
+  iconName, label, isActive, badge, onPress,
 }: {
   iconName: keyof typeof Feather.glyphMap;
   label: string;
   isActive: boolean;
+  badge?: number;
   onPress: () => void;
 }) {
   const scaleAnim = useRef(new Animated.Value(isActive ? 1 : 0.88)).current;
@@ -162,7 +228,14 @@ function TabItem({
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.tabItem}>
       <Animated.View style={[styles.tabItemInner, { transform: [{ scale: scaleAnim }] }]}>
-        <Feather name={iconName} color={iconColor} size={22} />
+        <View style={{ position: 'relative' }}>
+          <Feather name={iconName} color={iconColor} size={22} />
+          {badge != null && badge > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{badge > 9 ? '9+' : badge}</Text>
+            </View>
+          )}
+        </View>
         <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>{label}</Text>
       </Animated.View>
       {isActive && <View style={styles.activeIndicator} />}
@@ -176,7 +249,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#ffffff',
     borderTopWidth: 1, borderTopColor: '#f1f5f9',
-    paddingTop: 8, paddingHorizontal: 8,
+    paddingTop: 8, paddingHorizontal: 4,
     shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 16,
     shadowOffset: { width: 0, height: -4 }, elevation: 16,
     zIndex: 999,
@@ -197,6 +270,17 @@ const styles = StyleSheet.create({
   activeIndicator: {
     position: 'absolute', bottom: -4, width: 20, height: 3,
     borderRadius: 2, backgroundColor: '#6366f1',
+  },
+  badge: {
+    position: 'absolute', top: -5, right: -8,
+    minWidth: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#ef4444',
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5, borderColor: '#ffffff',
+  },
+  badgeText: {
+    color: '#ffffff', fontSize: 9, fontWeight: '800',
   },
   postBtn: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
