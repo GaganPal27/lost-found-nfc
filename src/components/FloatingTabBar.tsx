@@ -11,10 +11,10 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 
 export const TAB_ROUTES = [
-  { name: 'community',     iconName: 'home'           as const, label: 'Home' },
-  { name: 'messages',      iconName: 'message-circle' as const, label: 'Messages' },
-  { name: 'notifications', iconName: 'bell'           as const, label: 'Alerts' },
-  { name: 'my-items',      iconName: 'tag'            as const, label: 'Tags' },
+  { name: 'community', iconName: 'home'           as const, label: 'Home' },
+  { name: 'scan',      iconName: 'maximize'        as const, label: 'Scanner' },
+  { name: 'messages',  iconName: 'message-circle'  as const, label: 'Messages' },
+  { name: 'my-items',  iconName: 'tag'             as const, label: 'Tags' },
 ];
 
 // Shared helper so any scroll screen can compute exactly how much
@@ -94,13 +94,12 @@ export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabB
           onPress={() => onTabPress('community')}
         />
 
-        {/* Messages */}
+        {/* Scanner */}
         <TabItem
-          iconName="message-circle"
-          label="Messages"
-          isActive={activeRoute === 'messages'}
-          badge={unreadMessages}
-          onPress={() => onTabPress('messages')}
+          iconName="maximize"
+          label="Scanner"
+          isActive={activeRoute === 'scan'}
+          onPress={() => onTabPress('scan')}
         />
 
         {/* + Post (center) */}
@@ -114,13 +113,13 @@ export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabB
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Notifications */}
+        {/* Messages */}
         <TabItem
-          iconName="bell"
-          label="Alerts"
-          isActive={activeRoute === 'notifications'}
-          badge={unreadNotifs}
-          onPress={() => onTabPress('notifications')}
+          iconName="message-circle"
+          label="Messages"
+          isActive={activeRoute === 'messages'}
+          badge={unreadMessages}
+          onPress={() => onTabPress('messages')}
         />
 
         {/* Tags */}
@@ -143,8 +142,8 @@ export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabB
           <View style={styles.sheetContainer} onStartShouldSetResponder={() => true}>
             <View style={styles.handle} />
 
-            <Text style={styles.sheetTitle}>What do you want to do?</Text>
-            <Text style={styles.sheetSubtitle}>Post to the community or scan an NFC tag</Text>
+            <Text style={styles.sheetTitle}>What do you want to post?</Text>
+            <Text style={styles.sheetSubtitle}>Help the community find what was lost</Text>
 
             {/* Found */}
             <TouchableOpacity
@@ -174,22 +173,6 @@ export default function FloatingTabBar({ activeRoute, onTabPress }: FloatingTabB
               <View style={{ flex: 1 }}>
                 <Text style={styles.sheetOptionTitle}>I Lost Something</Text>
                 <Text style={styles.sheetOptionSub}>Alert the community to help you find it</Text>
-              </View>
-              <Feather name="chevron-right" size={18} color="#94a3b8" />
-            </TouchableOpacity>
-
-            {/* Scan NFC */}
-            <TouchableOpacity
-              style={[styles.sheetOption, { borderColor: '#c7d2fe' }]}
-              onPress={() => { setShowPostModal(false); router.push('/(tabs)/scan'); }}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.sheetOptionIcon, { backgroundColor: '#e0e7ff' }]}>
-                <Text style={{ fontSize: 26 }}>📡</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sheetOptionTitle}>Scan NFC Tag</Text>
-                <Text style={styles.sheetOptionSub}>Link or read an NFC tag on your item</Text>
               </View>
               <Feather name="chevron-right" size={18} color="#94a3b8" />
             </TouchableOpacity>

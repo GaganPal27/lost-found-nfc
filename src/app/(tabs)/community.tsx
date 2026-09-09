@@ -259,9 +259,28 @@ export default function CommunityScreen() {
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [nearbyRefreshing, setNearbyRefreshing] = useState(false);
   const [nearbyLocationError, setNearbyLocationError] = useState<string | null>(null);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   useEffect(() => { if (tabParam === 'groups') setActiveTab('groups'); }, [tabParam]);
+
+  // Unread notification count for bell badge
+  useEffect(() => {
+    if (!user?.id) return;
+    const fetch = async () => {
+      const { count } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadNotifCount(count ?? 0);
+    };
+    fetch();
+    const ch = supabase.channel('comm_notif_badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, fetch)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]);
 
   // Check Track 3 first — if selectedCollegeId is 'none', skip all DB queries
   useEffect(() => {
@@ -476,8 +495,13 @@ export default function CommunityScreen() {
               </Text>
             )}
           </View>
-          <TouchableOpacity style={styles.bellBtn} onPress={() => router.push('/notifications' as any)} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.bellBtn} onPress={() => router.push('/notifications-list' as any)} activeOpacity={0.8}>
             <Feather name="bell" size={20} color="#6366f1" />
+            {unreadNotifCount > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{unreadNotifCount > 9 ? '9+' : unreadNotifCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -599,7 +623,9 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#ffffff', fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
   headerLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 0 },
   headerMemberCount: { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '600', marginTop: 1 },
-  bellBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
+  bellBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4, position: 'relative' },
+  bellBadge: { position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#ef4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: '#ffffff' },
+  bellBadgeText: { color: '#ffffff', fontSize: 8, fontWeight: '800' },
 
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 4 },
   searchInput: { flex: 1, marginLeft: 8, fontSize: 14, color: '#0f172a', fontWeight: '500' },
