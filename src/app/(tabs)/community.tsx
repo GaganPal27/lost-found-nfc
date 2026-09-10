@@ -16,7 +16,7 @@ import * as Location from 'expo-location';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type PostType = 'found' | 'lost';
-type Tab = 'feed' | 'groups';
+
 
 type FeedPost = {
   id: string; postType: PostType; title: string; description: string | null;
@@ -240,10 +240,8 @@ export default function CommunityScreen() {
   const { user, dbUser } = useAuthStore();
   const dbUserId = dbUser?.id ?? null;
 
-  const [activeTab, setActiveTab] = useState<Tab>('feed');
   const [feed, setFeed] = useState<FeedPost[]>([]);
   const [filteredFeed, setFilteredFeed] = useState<FeedPost[]>([]);
-  const [groups, setGroups] = useState<CommunityGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -262,7 +260,7 @@ export default function CommunityScreen() {
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
-  useEffect(() => { if (tabParam === 'groups') setActiveTab('groups'); }, [tabParam]);
+  useEffect(() => { /* groups tab removed */ }, [tabParam]);
 
   // Unread notification count for bell badge
   useEffect(() => {
@@ -316,10 +314,9 @@ export default function CommunityScreen() {
   useEffect(() => {
     if (isTrack3 === null || isTrack3) return; // skip for Track 3
     fetchAll(true);
-    const s1 = supabase.channel('feed_found_v2').on('postgres_changes', { event: '*', schema: 'public', table: 'community_items' }, () => fetchAll(false)).subscribe();
-    const s2 = supabase.channel('feed_lost_v2').on('postgres_changes', { event: '*', schema: 'public', table: 'lost_item_posts' }, () => fetchAll(false)).subscribe();
-    const s3 = supabase.channel('feed_groups_v2').on('postgres_changes', { event: '*', schema: 'public', table: 'community_groups' }, () => fetchAll(false)).subscribe();
-    return () => { try { supabase.removeChannel(s1); supabase.removeChannel(s2); supabase.removeChannel(s3); } catch {} };
+    const s1 = supabase.channel('feed_found_v2').on('postgres_changes', { event: '*', schema: 'public', table: 'community_items', filter: `post_type=eq.found` }, fetchAll).subscribe();
+    const s2 = supabase.channel('feed_lost_v2').on('postgres_changes', { event: '*', schema: 'public', table: 'lost_item_posts' }, fetchAll).subscribe();
+    return () => { try { supabase.removeChannel(s1); supabase.removeChannel(s2); } catch {} };
   }, [userCollegeId, isTrack3]);
 
   useEffect(() => {
@@ -346,16 +343,14 @@ export default function CommunityScreen() {
         lostQuery  = lostQuery.eq('college_id', '00000000-0000-0000-0000-000000000000');
       }
 
-      const [foundRes, lostRes, groupsRes] = await Promise.all([
+      const [foundRes, lostRes] = await Promise.all([
         foundQuery,
         lostQuery,
-        supabase.from('community_groups').select('*').eq('is_official', false).order('created_at', { ascending: false }).limit(50),
       ]);
 
       const foundPosts: FeedPost[] = (foundRes.data ?? []).map((d: any) => ({ ...d, postType: 'found', owner_id: d.finder_id, author_name: d.users?.full_name }));
       const lostPosts: FeedPost[] = (lostRes.data ?? []).map((d: any) => ({ ...d, postType: 'lost', owner_id: d.poster_id, author_name: d.users?.full_name }));
       setFeed([...foundPosts, ...lostPosts].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-      setGroups((groupsRes.data ?? []).filter((g:any) => g?.id).map((g:any) => ({ ...g, id: String(g.id), type: g.type === 'private' ? 'private' : 'public', member_count: g.member_count ?? 0 })));
     } catch (e) {} finally { setLoading(false); }
   }, [userCollegeId]);
 
@@ -527,7 +522,7 @@ export default function CommunityScreen() {
           <Feather name="search" size={16} color="#94a3b8" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search posts or groups..."
+            placeholder="Search posts..."
             placeholderTextColor="#94a3b8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -539,10 +534,6 @@ export default function CommunityScreen() {
             </TouchableOpacity>
           )}
         </View>
-
-        {/* Tabs */}
-        <View style={styles.tabRow}>
-          <TouchableOpacity style={[styles.tabBtn, activeTab === 'feed' && styles.tabBtnActive]} onPress={() => setActiveTab('feed')} activeOpacity={0.8}>
             <Text style={[styles.tabBtnText, activeTab === 'feed' && styles.tabBtnTextActive]}>Found & Lost Board</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.tabBtn, activeTab === 'groups' && styles.tabBtnActive]} onPress={() => setActiveTab('groups')} activeOpacity={0.8}>
@@ -575,7 +566,7 @@ export default function CommunityScreen() {
       <View style={styles.body}>
         {loading ? (
           <View style={styles.center}><ActivityIndicator size="large" color="#6366f1" /></View>
-        ) : activeTab === 'feed' ? (
+        ) : (
           <FlatList
             data={filteredFeed}
             keyExtractor={i => `${i.postType}-${i.id}`}
@@ -588,34 +579,6 @@ export default function CommunityScreen() {
                 <Text style={{ fontSize: 52, marginBottom: 12 }}>📋</Text>
                 <Text style={styles.emptyTitle}>{searchQuery ? 'No results found' : 'Board is empty'}</Text>
                 <Text style={styles.emptySub}>Tap + to report a found or lost item.</Text>
-              </View>
-            }
-          />
-        ) : (
-          <FlatList
-            data={groups}
-            keyExtractor={i => i.id}
-            renderItem={({ item }) => <GroupCard group={item} onPress={() => router.push({ pathname: '/group/[id]', params: { id: String(item.id) } } as any)} />}
-            contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
-            showsVerticalScrollIndicator={false}
-            ListHeaderComponent={
-              <View style={{ marginBottom: 16 }}>
-                <TouchableOpacity style={styles.createGroupBtn} activeOpacity={0.88} onPress={() => router.push('/create-group')}>
-                  <LinearGradient colors={['#6366f1', '#7c3aed']} style={styles.createGroupGrad} start={{x:0,y:0}} end={{x:1,y:0}}>
-                    <Text style={styles.createGroupText}>+ Create Group</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.joinLink} onPress={() => router.push('/join-community')}>
-                  <Text style={styles.joinLinkText}>Browse all communities →</Text>
-                </TouchableOpacity>
-              </View>
-            }
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#6366f1" />}
-            ListEmptyComponent={
-              <View style={styles.empty}>
-                <Text style={{ fontSize: 52, marginBottom: 12 }}>👥</Text>
-                <Text style={styles.emptyTitle}>No groups yet</Text>
-                <Text style={styles.emptySub}>Create your university group to get started!</Text>
               </View>
             }
           />
