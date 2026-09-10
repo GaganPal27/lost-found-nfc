@@ -534,12 +534,6 @@ export default function CommunityScreen() {
             </TouchableOpacity>
           )}
         </View>
-            <Text style={[styles.tabBtnText, activeTab === 'feed' && styles.tabBtnTextActive]}>Found & Lost Board</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.tabBtn, activeTab === 'groups' && styles.tabBtnActive]} onPress={() => setActiveTab('groups')} activeOpacity={0.8}>
-            <Text style={[styles.tabBtnText, activeTab === 'groups' && styles.tabBtnTextActive]}>Local Groups</Text>
-          </TouchableOpacity>
-        </View>
       </LinearGradient>
 
       {/* ── Verification Banners ── */}
