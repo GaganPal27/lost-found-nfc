@@ -421,9 +421,26 @@ export default function CommunityScreen() {
           >
             <View style={styles.hCircle1} />
             <View style={styles.hCircle2} />
-            <Text style={styles.nearbyLabel}>NEAR YOU</Text>
-            <Text style={styles.nearbyTitle}>Nearby Board</Text>
-            <Text style={styles.nearbySubLabel}>Public lost &amp; found · {nearbyRadius / 1000}km radius</Text>
+            {/* Top row: title + bell */}
+            <View style={styles.nearbyTopRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.nearbyLabel}>NEAR YOU</Text>
+                <Text style={styles.nearbyTitle}>Nearby Board</Text>
+                <Text style={styles.nearbySubLabel}>Public lost &amp; found · {nearbyRadius / 1000}km radius</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.bellBtn}
+                onPress={() => router.push('/notifications-list' as any)}
+                activeOpacity={0.8}
+              >
+                <Feather name="bell" size={20} color="#6366f1" />
+                {unreadNotifCount > 0 && (
+                  <View style={styles.bellBadge}>
+                    <Text style={styles.bellBadgeText}>{unreadNotifCount > 9 ? '9+' : unreadNotifCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
             <View style={styles.radiusPicker}>
               {[5000, 10000, 25000].map(r => (
                 <TouchableOpacity
@@ -728,6 +745,7 @@ const styles = StyleSheet.create({
   nearbyHeader: {
     paddingHorizontal: 20, paddingBottom: 20, overflow: 'hidden', position: 'relative',
   },
+  nearbyTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 },
   nearbyLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
   nearbyTitle: { color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: -0.5, marginTop: 2, marginBottom: 2 },
   nearbySubLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '500', marginBottom: 14 },
