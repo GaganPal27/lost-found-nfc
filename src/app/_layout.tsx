@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Slot, Stack, useRouter, useSegments, usePathname } from 'expo-router';
-import { StatusBar, Platform, AppState, AppStateStatus, View } from 'react-native';
+import { StatusBar, Platform, AppState, AppStateStatus, View, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Sentry from '@sentry/react-native';
 import { supabase } from '../lib/supabase';
@@ -301,9 +301,10 @@ function RootLayout() {
         if (hasSeen !== 'true' && !inOnboarding) {
           router.replace('/onboarding');
         } else if (hasSeen === 'true' && (inAuthScreen || inOnboarding)) {
-          // Note: inSelectCollege is intentionally NOT here — authenticated users
-          // are allowed to visit select-college to change their institution.
-          router.replace('/');
+          // Wipe the entire navigation stack so pressing back after login
+          // doesn't take the user back through the login/onboarding flow.
+          try { router.dismissAll(); } catch {}
+          router.replace('/(tabs)/community' as any);
         }
       });
     }
@@ -344,16 +345,33 @@ function RootLayout() {
           />
         ))}
 
-        {/* Render floating tab bar everywhere except group and post screens */}
+        {/* Floating tab bar — use replace so tabs never stack in history */}
         {session && !inAuthScreen && !inOnboarding && !shouldHideTabBar && (
           <FloatingTabBar
             activeRoute={TAB_ROUTES.find(t => pathname && pathname.includes(t.name))?.name ?? 'my-items'}
-            onTabPress={(route) => router.push(`/(tabs)/${route}` as any)}
+            onTabPress={(route) => router.replace(`/(tabs)/${route}` as any)}
           />
+        )}
+
+        {/* Loading overlay — blocks the half-loaded state on cold start */}
+        {!authInitialized && !startupTimeout && (
+          <View style={loadingOverlayStyle.overlay}>
+            <ActivityIndicator size="large" color="#ffffff" />
+          </View>
         )}
       </View>
     </SafeAreaProvider>
   );
 }
+
+
+const loadingOverlayStyle = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#6366f1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 
 export default Sentry.wrap(RootLayout);

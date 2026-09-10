@@ -317,7 +317,7 @@ export default function CommunityScreen() {
     const s1 = supabase.channel('feed_found_v2').on('postgres_changes', { event: '*', schema: 'public', table: 'community_items', filter: `post_type=eq.found` }, fetchAll).subscribe();
     const s2 = supabase.channel('feed_lost_v2').on('postgres_changes', { event: '*', schema: 'public', table: 'lost_item_posts' }, fetchAll).subscribe();
     return () => { try { supabase.removeChannel(s1); supabase.removeChannel(s2); } catch {} };
-  }, [userCollegeId, isTrack3]);
+  }, [userCollegeId, isTrack3, dbUserId]);
 
   useEffect(() => {
     if (!searchQuery.trim()) { setFilteredFeed(feed); }
