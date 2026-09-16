@@ -33,16 +33,6 @@ CREATE POLICY "Users can read own verification"
   TO authenticated USING (auth.uid() = user_id);
 -- Admins can read all verifications via admin_get_all_users RPC (bypasses RLS already)
 
--- ── smart_matches ─────────────────────────────────────────────────────────────
-ALTER TABLE public.smart_matches ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Users can read own smart matches" ON public.smart_matches;
-CREATE POLICY "Users can read own smart matches"
-  ON public.smart_matches FOR SELECT
-  TO authenticated USING (true);
-DROP POLICY IF EXISTS "System can insert smart matches" ON public.smart_matches;
-CREATE POLICY "System can insert smart matches"
-  ON public.smart_matches FOR INSERT
-  TO authenticated WITH CHECK (true);
 
 -- ── messages ─────────────────────────────────────────────────────────────────
 -- (Ensure RLS is on — it may already be, but this is idempotent)
