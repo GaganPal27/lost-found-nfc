@@ -11,9 +11,9 @@ import * as Haptics from 'expo-haptics';
 type Mode = 'choose' | 'writing' | 'linking' | 'success';
 
 export default function WriteTagScreen() {
-  const { id, nfc_uid, ble_beacon_id, tag_type, service_uuid } = useLocalSearchParams<{
+  const { id, qr_id, ble_beacon_id, tag_type, service_uuid } = useLocalSearchParams<{
     id: string;
-    nfc_uid: string;
+    qr_id: string;
     ble_beacon_id: string;
     tag_type: string;
     service_uuid: string;
@@ -22,11 +22,12 @@ export default function WriteTagScreen() {
 
   const [mode, setMode] = useState<Mode>('choose');
   const [linkedUid, setLinkedUid] = useState<string | null>(null);
+  const [nfcWriteWarning, setNfcWriteWarning] = useState(false); // graceful fallback state
 
-  const tagType = String(tag_type);
-  const itemId = String(id);
-  const presetNfcUid = String(nfc_uid); // UUID pre-generated for programmed tags
-  const beaconId = String(ble_beacon_id);
+  const tagType     = String(tag_type);
+  const itemId      = String(id);
+  const qrId        = String(qr_id);   // pre-generated ID shared by QR + NFC
+  const beaconId    = String(ble_beacon_id);
   const serviceUuid = String(service_uuid);
 
   const isNFC = tagType === 'nfc_only' || tagType === 'nfc_ble';
@@ -74,22 +75,36 @@ export default function WriteTagScreen() {
   // ── Program Blank Tag ──────────────────────────────────────────────────────
   const handleProgramTag = async () => {
     setMode('writing');
-    // SPRINT 3 / SPRINT 0 INTEGRATION: Use the new official domain for NFC tags
-    // Format: https://keepr.dpdns.org/i/[uuid]
-    const url = `https://keepr.dpdns.org/i/${presetNfcUid}`;
+    // Write the same URL that is printed on the QR code, so both identifiers
+    // (NFC tap and QR scan) resolve to the exact same page for strangers.
+    const url = `https://keepr.dpdns.org/i/${qrId}`;
     const wrote = await writeNDEFUrl(url);
 
     if (wrote) {
-      // Update the item row with the UUID we wrote
+      // Read the hardware UID that was just tapped so we can store it
+      // alongside qr_id — this enables the OR query on the website.
+      // writeNDEFUrl already has the hardware UID internally; we use a
+      // separate linkExistingTag call is not needed here since we're
+      // updating the nfc_uid after a successful program.
+      // For now we store the qr_id as the nfc_uid as well (both point to
+      // the same URL); a future improvement is to read the hardware UID
+      // separately and store it distinctly.
       await supabase.from('items').update({
-        nfc_uid: presetNfcUid,
+        nfc_uid: qrId,          // URL-encoded ID written to chip
         nfc_link_type: 'programmed',
       }).eq('id', itemId);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setMode('success');
     } else {
-      setMode('choose');
-      Alert.alert('Write Failed', 'Could not write to NFC tag. Please try again.');
+      // Non-blocking degraded mode: chip is locked or incompatible.
+      // Registration still completes — QR code works fully.
+      // NFC-for-strangers is degraded but item is saved.
+      setNfcWriteWarning(true);
+      await supabase.from('items').update({
+        nfc_link_type: 'programmed_failed',
+      }).eq('id', itemId);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      setMode('success');
     }
   };
 
@@ -301,12 +316,27 @@ export default function WriteTagScreen() {
           </View>
         )}
 
-        {/* Success state */}
         {mode === 'success' && (
           <Animated.View style={{ opacity: fadeIn, alignItems: 'center', marginBottom: 32 }}>
             <View className="w-32 h-32 bg-green-100 border border-green-200 rounded-full items-center justify-center mb-6 shadow-sm">
               <Text className="text-6xl">✅</Text>
             </View>
+
+            {/* Non-blocking NFC write failure warning */}
+            {nfcWriteWarning && (
+              <View style={{
+                backgroundColor: '#fffbeb', borderWidth: 1.5, borderColor: '#f59e0b',
+                borderRadius: 16, padding: 16, marginBottom: 20, width: '100%',
+              }}>
+                <Text style={{ color: '#92400e', fontWeight: '800', fontSize: 14, marginBottom: 4 }}>
+                  ⚠️ Chip couldn't be written
+                </Text>
+                <Text style={{ color: '#78350f', fontSize: 13, lineHeight: 19 }}>
+                  This chip may be locked by the manufacturer. Your QR code works fully — anyone can still scan it to find you. The NFC tap will only work inside the Keepr app for now.
+                </Text>
+              </View>
+            )}
+
             {linkedUid && (
               <View className="bg-white border border-slate-200 rounded-2xl px-5 py-3 mb-4 items-center shadow-sm">
                 <Text className="text-slate-500 text-xs mb-1 uppercase tracking-wider font-bold">Linked Card ID</Text>
@@ -314,9 +344,11 @@ export default function WriteTagScreen() {
               </View>
             )}
             <Text className="text-slate-600 text-base text-center leading-6 px-4 font-medium">
-              {linkedUid
-                ? 'Your existing card is now linked. Finders using the app will be able to identify it.'
-                : 'NFC tag programmed. Any smartphone that taps it will see it belongs to you.'}
+              {nfcWriteWarning
+                ? 'Item registered! Use the QR code on your tag to share it with others.'
+                : linkedUid
+                  ? 'Your existing card is now linked. Finders using the app will be able to identify it.'
+                  : 'NFC tag programmed. Any smartphone that taps it will see it belongs to you.'}
             </Text>
           </Animated.View>
         )}

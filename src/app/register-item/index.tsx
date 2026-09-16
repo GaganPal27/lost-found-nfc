@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert, StatusBar, StyleSheet,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,6 +40,11 @@ export default function RegisterItemScreen() {
   const { user } = useAuthStore();
   const { itemsCount, fetchCount } = useItemStore();
   const { tier } = useSubscriptionStore();
+
+  // qr_id is passed from scan-qr.tsx after the tag is verified as unclaimed.
+  // If absent (legacy flow or dev skip), the screen still works but the
+  // claim RPC will fail — intentional, since we require a valid pool ID.
+  const { qr_id } = useLocalSearchParams<{ qr_id: string }>();
 
   const [name, setName]               = useState('');
   const [category, setCategory]       = useState('Personal');
@@ -94,30 +99,45 @@ export default function RegisterItemScreen() {
   const handleRegister = async () => {
     if (!name.trim()) return Alert.alert('Required', 'Item name is required');
     if (limitReached) return setShowUpgrade(true);
+    if (!qr_id) return Alert.alert('Missing Tag', 'No QR code scanned. Please go back and scan your Keepr tag first.');
 
     try {
       setLoading(true);
-      const nfc_uid = tagType !== 'ble_only' ? generateUUID() : null;
+
+      // Generate BLE beacon ID if needed (NFC UID will be set by write-tag.tsx after tap)
       const ble_beacon_id = tagType !== 'nfc_only' ? `LF-BLE-${generateUUID().slice(0, 6).toUpperCase()}` : null;
-      const service_uuid = ble_beacon_id ? generateServiceUUID(ble_beacon_id) : null;
+      const service_uuid  = ble_beacon_id ? generateServiceUUID(ble_beacon_id) : null;
 
-      const { data, error } = await supabase.from('items').insert({
-        user_id: user?.id,
-        item_name: name,
-        category,
-        color,
-        description,
-        image_url: imageUri,
-        nfc_uid,
-        ble_beacon_id,
-        service_uuid,
-        tag_type: tagType,
-        status: 'active',
-        tracking_networks: tagType !== 'nfc_only' ? ['app_relay'] : [],
-      }).select().single();
+      // ── Atomic claim: marks tag as claimed + inserts item in one transaction.
+      // p_user_id is NOT passed — the function resolves it from auth.uid() server-side.
+      const { data: itemId, error: claimError } = await supabase.rpc('claim_tag_and_create_item', {
+        p_qr_id:         qr_id,
+        p_item_name:     name,
+        p_category:      category,
+        p_color:         color,
+        p_description:   description,
+        p_image_url:     imageUri,
+        p_tag_type:      tagType,
+        p_ble_beacon_id: ble_beacon_id,
+        p_service_uuid:  service_uuid,
+      });
 
-      if (error) throw error;
+      if (claimError) {
+        if (claimError.message?.includes('TAG_ALREADY_CLAIMED')) {
+          Alert.alert(
+            'Tag Already Registered',
+            'This tag has already been linked to another item. If this is your tag, please contact support.',
+            [{ text: 'Go Back', onPress: () => router.back() }]
+          );
+        } else if (claimError.message?.includes('UNAUTHORIZED')) {
+          Alert.alert('Session Expired', 'Please log in again to continue.');
+        } else {
+          throw claimError;
+        }
+        return;
+      }
 
+      const data = { id: itemId as string };
       // Capture GPS location
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -145,11 +165,11 @@ export default function RegisterItemScreen() {
       }
 
       if (tagType === 'nfc_ble') {
-        router.push({ pathname: '/nfc-ble-setup', params: { id: data.id, nfc_uid: nfc_uid || '', ble_beacon_id: ble_beacon_id || '', service_uuid: service_uuid || '' } });
+        router.push({ pathname: '/nfc-ble-setup', params: { id: data.id, nfc_uid: '', ble_beacon_id: ble_beacon_id || '', service_uuid: service_uuid || '' } });
       } else {
         router.push({
           pathname: '/register-item/write-tag',
-          params: { id: data.id, nfc_uid: nfc_uid || '', ble_beacon_id: ble_beacon_id || '', tag_type: tagType, service_uuid: service_uuid || '' },
+          params: { id: data.id, qr_id: qr_id || '', ble_beacon_id: ble_beacon_id || '', tag_type: tagType, service_uuid: service_uuid || '' },
         });
       }
     } catch (e: any) {
