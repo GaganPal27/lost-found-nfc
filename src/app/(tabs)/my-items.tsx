@@ -128,7 +128,7 @@ export default function MyItemsScreen() {
                 Register your first item and let the{'\n'}global tracking network watch over it.
               </Text>
               <TouchableOpacity
-                onPress={() => router.push('/register-item')}
+                onPress={() => router.push('/register-item/scan-qr')}
                 activeOpacity={0.88}
                 style={{ borderRadius: 18, overflow: 'hidden' }}
               >
@@ -149,7 +149,7 @@ export default function MyItemsScreen() {
       {/* ── FAB ── */}
       {items.length > 0 && (
         <TouchableOpacity
-          onPress={() => router.push('/register-item')}
+          onPress={() => router.push('/register-item/scan-qr')}
           activeOpacity={0.88}
           style={[styles.fab, { bottom: tabBarClearance + 16 }]}
         >

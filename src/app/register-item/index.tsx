@@ -65,6 +65,12 @@ export default function RegisterItemScreen() {
 
   const limitReached = itemsCount >= PLAN_LIMITS[tier as keyof typeof PLAN_LIMITS].maxItems;
 
+  useEffect(() => {
+    if (!qr_id) {
+      router.replace('/register-item/scan-qr');
+    }
+  }, [qr_id]);
+
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -231,6 +237,18 @@ export default function RegisterItemScreen() {
           extraScrollHeight={20}
         >
           
+          {/* Linked Tag Badge */}
+          {qr_id ? (
+            <View style={styles.tagBadge}>
+              <View style={styles.tagBadgeIcon}>
+                <Text style={styles.tagBadgeIconText}>✓</Text>
+              </View>
+              <Text style={styles.tagBadgeText}>
+                Tag Linked: <Text style={styles.tagBadgeCode}>{qr_id}</Text>
+              </Text>
+            </View>
+          ) : null}
+
           {/* Image Picker */}
           <TouchableOpacity
             onPress={pickImage}
@@ -435,6 +453,31 @@ const styles = StyleSheet.create({
 
   /* Tag Type */
   tagTypeWrap: { marginTop: 8, marginBottom: 24 },
+
+  /* Tag Badge */
+  tagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: '#bbf7d0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 18,
+    gap: 8,
+  },
+  tagBadgeIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagBadgeIconText: { color: '#fff', fontSize: 13, fontWeight: '900' },
+  tagBadgeText: { color: '#166534', fontSize: 13, fontWeight: '600' },
+  tagBadgeCode: { fontFamily: 'monospace', fontWeight: '800', color: '#15803d' },
 
   /* Submit Button */
   submitBtnWrap: { borderRadius: 18, overflow: 'hidden', shadowColor: '#6366f1', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
